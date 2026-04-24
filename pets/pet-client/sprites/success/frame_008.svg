@@ -1,0 +1,99 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+      <!-- 背景：透明 -->
+      <rect width="200" height="200" fill="none"/>
+
+      <!-- 身体 - 根据状态调整 -->
+      
+    <ellipse cx="100" cy="110" rx="60" ry="55" fill="#FF8C42" transform="scale(0.9566987298107781)"/>
+    <ellipse cx="100" cy="115" rx="50" ry="40" fill="#E67E22" transform="scale(0.9566987298107781)"/>
+  
+
+      <!-- 肚子 -->
+      
+    <ellipse cx="100" cy="125" rx="40" ry="30" fill="#FFE4B5" transform="scale(0.9740192378864668)"/>
+  
+
+      <!-- 耳朵 -->
+      
+    <!-- 左耳 -->
+    <ellipse cx="55" cy="60" rx="18" ry="25" fill="#FF8C42"
+            transform="rotate(-6.339745962155609deg, 55, 70)"/>
+    <ellipse cx="55" cy="63" rx="10" ry="15" fill="#FFB6C1"
+            transform="rotate(-6.339745962155609deg, 55, 70)"/>
+
+    <!-- 右耳 -->
+    <ellipse cx="145" cy="60" rx="18" ry="25" fill="#FF8C42"
+            transform="rotate(6.339745962155609deg, 145, 70)"/>
+    <ellipse cx="145" cy="63" rx="10" ry="15" fill="#FFB6C1"
+            transform="rotate(6.339745962155609deg, 145, 70)"/>
+  
+
+      <!-- 眼睛 -->
+      
+    <!-- 左眼外圈 -->
+    <ellipse cx="80" cy="95" rx="12" ry="15" fill="white"/>
+    
+      <!-- 左眼球 -->
+      <circle cx="80" cy="95" r="6" fill="#2C3E50"/>
+      <!-- 左眼高光 -->
+      <circle cx="78" cy="93" r="2" fill="#FFFFFF"/>
+    
+
+    <!-- 右眼外圈 -->
+    <ellipse cx="120" cy="95" rx="12" ry="15" fill="white"/>
+    
+      <!-- 右眼球 -->
+      <circle cx="120" cy="95" r="6" fill="#2C3E50"/>
+      <!-- 右眼高光 -->
+      <circle cx="118" cy="93" r="2" fill="#FFFFFF"/>
+    
+  
+
+      <!-- 鼻子 -->
+      
+    <ellipse cx="100" cy="110" rx="6" ry="5" fill="#FF6B6B" transform="scale(1.067546318055115)"/>
+  
+
+      <!-- 腮红 -->
+      
+    <ellipse cx="70" cy="115" rx="8" ry="5" fill="#FFB347" opacity="0.899914720608301"/>
+    <ellipse cx="130" cy="115" rx="8" ry="5" fill="#FFB347" opacity="0.899914720608301"/>
+  
+
+      <!-- 嘴巴 -->
+      <path d="M 85 118 Q 100 128 115 118" stroke="#8B7355" stroke-width="3" fill="none"/>
+
+      <!-- 胡须 -->
+      
+    <!-- 左侧胡须 -->
+    <line x1="50" y1="105" x2="20" y2="97.72959251407622" stroke="#8B7355" stroke-width="2" opacity="0.8026389541653453"/>
+    <line x1="50" y1="110" x2="20" y2="107.72959251407622" stroke="#8B7355" stroke-width="2" opacity="0.8026389541653453"/>
+    <line x1="50" y1="115" x2="20" y2="112.72959251407622" stroke="#8B7355" stroke-width="2" opacity="0.8026389541653453"/>
+
+    <!-- 右侧胡须 -->
+    <line x1="150" y1="105" x2="180" y2="97.72959251407622" stroke="#8B7355" stroke-width="2" opacity="0.8026389541653453"/>
+    <line x1="150" y1="110" x2="180" y2="107.72959251407622" stroke="#8B7355" stroke-width="2" opacity="0.8026389541653453"/>
+    <line x1="150" y1="115" x2="180" y2="112.72959251407622" stroke="#8B7355" stroke-width="2" opacity="0.8026389541653453"/>
+  
+
+      <!-- 特效 -->
+      
+        <!-- 星星 1 -->
+        <text x="25" y="35.531000431915174" font-size="16">⭐</text>
+      
+        <!-- 星星 2 -->
+        <text x="170" y="45.531000431915174" font-size="16">⭐</text>
+      
+        <!-- 星星 3 -->
+        <text x="15" y="65.53100043191517" font-size="16">⭐</text>
+      
+        <!-- 星星 4 -->
+        <text x="180" y="55.531000431915174" font-size="16">⭐</text>
+      
+        <!-- 星星 5 -->
+        <text x="20" y="80.53100043191517" font-size="16">⭐</text>
+      
+        <!-- 星星 6 -->
+        <text x="175" y="75.53100043191517" font-size="16">⭐</text>
+      
+    </svg>

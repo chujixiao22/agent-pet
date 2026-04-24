@@ -1,0 +1,16 @@
+node_modules/
+.DS_Store
+*.log
+.env
+.env.local
+dist/
+dist2/
+packaged/
+build/
+*.exe
+*.asar
+*.log
+.cache/
+.temp/
+*.png
+!pets/pet-client/animation-preview/frames/*/

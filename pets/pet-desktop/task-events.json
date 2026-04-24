@@ -1,0 +1,15 @@
+{
+  "tasks": [
+    {
+      "id": "db12fc94-114b-4d58-b4a3-4e08d96fa0ff",
+      "cwd": "F:\\codes\\claw-pet",
+      "status": "working",
+      "startedAt": "2026-04-22T10:53:37.761Z",
+      "lastActivity": "2026-04-22T12:59:58.336Z",
+      "toolCount": 19,
+      "lastTool": "Edit",
+      "lastToolSummary": "Edit: f:\\codes\\claw-pet\\.claude\\hooks\\pet-hook.js",
+      "completedAt": null
+    }
+  ]
+}

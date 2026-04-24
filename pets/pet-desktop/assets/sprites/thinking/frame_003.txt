@@ -1,0 +1,7 @@
+Frame 3 of thinking
+This is a placeholder for the thinking animation state.
+In a real implementation, this would be a PNG image.
+
+State: thinking
+Frame: 3
+Time: 2026-04-14T07:30:27.347Z

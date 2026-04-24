@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>电子宠物 - MVP</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: Arial, sans-serif;
+    }
+    #main-container {
+      text-align: center;
+      color: white;
+    }
+    h1 {
+      font-size: 48px;
+      margin-bottom: 20px;
+      animation: bounce 2s ease-in-out infinite;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-20px); }
+    }
+    .pet-preview {
+      width: 300px;
+      height: 300px;
+      margin: 20px auto;
+      border: 4px dashed rgba(255,255,255,0.3);
+      border-radius: 10px;
+      background: rgba(0,0,0,0.2);
+    }
+    .pet-preview img {
+      width: 100%;
+      height: 100%;
+    }
+    .info-box {
+      background: rgba(255,255,255,0.1);
+      padding: 20px 40px;
+      border-radius: 15px;
+      margin-top: 30px;
+      max-width: 600px;
+      text-align: left;
+    }
+    .info-box h2 {
+      margin-top: 0;
+      color: #FFD700;
+    }
+    .info-box p {
+      line-height: 1.6;
+      margin: 10px 0;
+    }
+    .status-display {
+      margin-top: 30px;
+      font-size: 18px;
+      color: #4169E1;
+    }
+    .buttons {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 12px 24px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #28a745;
+      color: white;
+      transition: all 0.3s;
+    }
+    .btn:hover {
+      background: #218838;
+      transform: scale(1.05);
+    }
+    .btn:active {
+      transform: scale(0.95);
+    }
+  </style>
+</head>
+<body>
+  <div id="main-container">
+    <h1>🦊 电子宠物 MVP 🦊</h1>
+
+    <div class="pet-preview">
+      <img src="sprites/idle/frame_001.svg" alt="Pet Preview"/>
+    </div>
+
+    <div class="info-box">
+      <h2>🎉 宠物图片已生成！</h2>
+      <p><strong>📁 位置：</strong> f:/codes/claw-pet/pets/pet-client/sprites/</p>
+      <p><strong>🎨 格式：</strong> SVG 矢量图（小狐狸猫）</p>
+      <p><strong>🎬 数量：</strong> 24 帧动画图片</p>
+      <p><strong>🔄 状态：</strong> 6 种状态</p>
+      <ul>
+        <li>🦊 Idle（待机）</li>
+        <li>💤 Idle Long（久等）</li>
+        <li>💪 Working（工作）</li>
+        <li>🤔 Thinking（思考）</li>
+        <li>🎉 Success（成功）</li>
+        <li>😢 Error（错误）</li>
+      </ul>
+    </div>
+
+    <div class="status-display" id="status">
+      当前状态：Idle
+    </div>
+
+    <div class="buttons">
+      <button class="btn" onclick="startServer()">🚀 启动服务器</button>
+      <button class="btn" onclick="openLocal()">📂 打开文件</button>
+    </div>
+
+    <div class="info-box">
+      <h2>📖 使用说明</h2>
+      <p><strong>方式 1（推荐）：</strong>双击运行 <code>START_PET.bat</code> 文件</p>
+      <p><strong>方式 2：</strong>点击上方"启动服务器"按钮</p>
+      <p><strong>方式 3：</strong>在命令行运行：<code>node simple-pet-server.js</code></p>
+      <p><strong>启动后：</strong>打开浏览器访问 <code>http://localhost:3001</code></p>
+    </div>
+  </div>
+
+  <script>
+    const statusDisplay = document.getElementById('status');
+
+    // 切换状态
+    const states = [
+      { name: 'Idle', emoji: '🦊', path: 'sprites/idle/frame_001.svg' },
+      { name: 'Working', emoji: '💪', path: 'sprites/working/frame_001.svg' },
+      { name: 'Thinking', emoji: '🤔', path: 'sprites/thinking/frame_001.svg' },
+      { name: 'Success', emoji: '🎉', path: 'sprites/success/frame_001.svg' },
+      { name: 'Error', emoji: '😢', path: 'sprites/error/frame_001.svg' },
+      { name: 'Idle Long', emoji: '💤', path: 'sprites/idle_long/frame_001.svg' }
+    ];
+
+    let currentState = 0;
+
+    function changeState() {
+      currentState = (currentState + 1) % states.length;
+      const state = states[currentState];
+      statusDisplay.innerHTML = `当前状态：${state.emoji} ${state.name}`;
+      document.querySelector('.pet-preview img').src = state.path;
+      console.log('切换到:', state.name);
+    }
+
+    setInterval(changeState, 3000);
+
+    function startServer() {
+      alert('请使用 START_PET.bat 文件启动服务器，或者在命令行运行：node simple-pet-server.js');
+    }
+
+    function openLocal() {
+      window.open('file:///f:/codes/claw-pet/pets/pet-client/');
+    }
+  </script>
+</body>
+</html>
