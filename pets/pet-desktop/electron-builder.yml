@@ -1,0 +1,27 @@
+appId: com.clawpet.desktop
+productName: DesktopPet
+copyright: Copyright 2024
+
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+  artifactName: DesktopPet.exe
+
+portable:
+  artifactName: DesktopPet.exe
+
+directories:
+  buildResources: build
+  output: dist
+
+files:
+  - src/**/*
+  - assets/**/*
+  - package.json
+
+extraMetadata:
+  main: src/main.js
+
+asar: true

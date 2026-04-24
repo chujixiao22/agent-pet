@@ -1,0 +1,7 @@
+Frame 2 of idle_long
+This is a placeholder for the idle_long animation state.
+In a real implementation, this would be a PNG image.
+
+State: idle_long
+Frame: 2
+Time: 2026-04-14T07:30:27.341Z

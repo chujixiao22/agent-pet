@@ -1,0 +1,22 @@
+{
+  "name": "skin-editor",
+  "version": "1.0.0",
+  "description": "SVG skin editor for claw-pet desktop animations",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging"
+  },
+  "keywords": [
+    "electron",
+    "skin-editor",
+    "svg-animation",
+    "pet-desktop"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "electron": "^28.3.3",
+    "jszip": "^3.10.1"
+  }
+}

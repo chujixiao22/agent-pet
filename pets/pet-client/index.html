@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      width: 200px;
+      height: 200px;
+      background: transparent;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #pet {
+      font-size: 60px;
+      cursor: pointer;
+      user-select: none;
+      animation: float 3s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+    }
+    @keyframes happy {
+      0%, 100% { transform: scale(1) rotate(0deg); }
+      25% { transform: scale(1.1) rotate(-5deg); }
+      75% { transform: scale(1.1) rotate(5deg); }
+    }
+    @keyframes working {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(5px); }
+    }
+    .happy { animation: happy 0.5s ease-in-out infinite; }
+    .working { animation: working 0.3s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <div id="pet">🦊</div>
+  <script>
+    const pet = document.getElementById('pet');
+    const statuses = ['🦊', '😺', '😴', '🤔', '🎉', '😢'];
+    const statusNames = ['idle', 'working', 'idle_long', 'thinking', 'success', 'error'];
+
+    let currentStatus = 0;
+
+    // Change status every 3 seconds
+    setInterval(() => {
+      currentStatus = (currentStatus + 1) % statuses.length;
+      pet.textContent = statuses[currentStatus];
+
+      // Update animation class
+      pet.className = '';
+      if (currentStatus === 4) { // success
+        pet.classList.add('happy');
+      } else if (currentStatus === 1) { // working
+        pet.classList.add('working');
+      }
+
+      console.log('Status:', statusNames[currentStatus]);
+    }, 3000);
+
+    // Click handler
+    pet.addEventListener('click', () => {
+      pet.textContent = '❤️';
+      setTimeout(() => {
+        pet.textContent = statuses[currentStatus];
+      }, 1000);
+    });
+  </script>
+</body>
+</html>

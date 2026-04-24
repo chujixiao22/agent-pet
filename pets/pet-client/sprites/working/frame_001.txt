@@ -1,0 +1,7 @@
+Frame 1 of working
+This is a placeholder for the working animation state.
+In a real implementation, this would be a PNG image.
+
+State: working
+Frame: 1
+Time: 2026-04-14T07:30:27.343Z

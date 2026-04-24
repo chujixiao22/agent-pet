@@ -1,0 +1,26 @@
+{
+  "name": "desktop-pet",
+  "version": "1.0.0",
+  "description": "Desktop Pet Application",
+  "author": "ClawPet",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.clawpet.desktop",
+    "productName": "DesktopPet",
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "DesktopPet.exe"
+    }
+  },
+  "devDependencies": {
+    "@electron/packager": "^19.1.0",
+    "electron": "^28.3.3",
+    "electron-builder": "^26.8.1"
+  }
+}
