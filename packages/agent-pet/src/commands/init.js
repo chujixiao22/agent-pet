@@ -12,63 +12,66 @@ async function init() {
   }
 
   // 2. 配置 Claude Code 全局 hook
-  const claudeDir = path.join(os.homedir(), '.claude');
-  const hooksDir = path.join(claudeDir, 'hooks');
+  const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
+  const hooksDir = path.join(os.homedir(), '.claude', 'hooks');
+  const petHookPath = path.join(hooksDir, 'pet-hook.sh');
 
+  // 确保目录存在
   if (!fs.existsSync(hooksDir)) {
     fs.mkdirSync(hooksDir, { recursive: true });
   }
 
-  // 创建 hook 脚本
-  const hookContent = `#!/bin/bash
-# agent-pet hook - 在 Claude Code 运行时启动宠物
-
-# 获取脚本所在目录
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PET_SCRIPT="$SCRIPT_DIR/pet-hook.sh"
-
-# 如果存在 pet hook 脚本，则执行
-if [ -f "$PET_SCRIPT" ]; then
-  bash "$PET_SCRIPT" &
-fi
-`;
-
-  // 检查是否已经有 hook
-  const existingHook = path.join(hooksDir, 'preamble.sh');
-  if (fs.existsSync(existingHook)) {
-    const content = fs.readFileSync(existingHook, 'utf8');
-    if (content.includes('agent-pet')) {
-      console.log('✅ Hook already configured');
-      return;
-    }
-  }
-
-  // 写入 hook
-  fs.writeFileSync(existingHook, hookContent);
-  console.log('✅ Global hook configured at:', existingHook);
-
-  // 3. 创建 pet-hook.sh
-  const petHookPath = path.join(hooksDir, 'pet-hook.sh');
+  // 创建 pet-hook.sh
   const petHookContent = `#!/bin/bash
-# agent-pet pet hook
+# agent-pet global hook
+set -euo pipefail
 
-# 检查是否应该启动宠物
-if [ "$AGENT_PET_ENABLED" != "false" ]; then
-  # macOS: 使用 open 启动
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    # 尝试查找并启动 agent-pet
-    if command -v agent-pet &> /dev/null; then
-      agent-pet start &
+INPUT=$(cat)
+HOOK_NAME=$(echo "$INPUT" | jq -r '.hook_name // ""')
+
+AGENT_PET_DIR="$HOME/.agent-pet"
+
+case "$HOOK_NAME" in
+  "Start")
+    if [ -f "$AGENT_PET_DIR/config.json" ]; then
+      ENABLED=$(jq -r '.enabled // true' "$AGENT_PET_DIR/config.json" 2>/dev/null || echo "true")
+      if [ "$ENABLED" = "true" ]; then
+        # 尝试启动宠物
+        if command -v agent-pet &> /dev/null; then
+          agent-pet start &
+        fi
+      fi
     fi
-  fi
-fi
+    ;;
+esac
+
+# 传递事件
+echo "$INPUT"
 `;
 
   fs.writeFileSync(petHookPath, petHookContent);
   fs.chmodSync(petHookPath, '755');
   console.log('✅ Pet hook created at:', petHookPath);
 
-  // 4. 创建配置
+  // 读取或创建 settings.json
+  let settings = {};
+  if (fs.existsSync(settingsPath)) {
+    const content = fs.readFileSync(settingsPath, 'utf8');
+    settings = JSON.parse(content);
+  }
+
+  // 添加 hooks 配置
+  settings.hooks = {
+    ...settings.hooks,
+    Start: petHookPath,
+    Stop: petHookPath
+  };
+
+  // 写回 settings.json
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+  console.log('✅ Claude Code settings.json updated at:', settingsPath);
+
+  // 3. 创建配置
   const config = {
     enabled: true,
     autoStart: true,
@@ -86,6 +89,7 @@ fi
   console.log('');
   console.log('Next steps:');
   console.log('  agent-pet start  - Start the pet');
+  console.log('  Restart Claude Code to apply hooks');
 }
 
 module.exports = { init };
