@@ -1,0 +1,25 @@
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  <!-- 粉色背景 -->
+  <rect width="200" height="200" fill="#FFE4E1"/>
+  <!-- 身体 -->
+  <ellipse cx="100" cy="130" rx="50" ry="45" fill="#FFB6C1"/>
+  <!-- 头 -->
+  <circle cx="100" cy="80" r="45" fill="#FFB6C1"/>
+  <!-- 耳朵（三角形） -->
+  <polygon points="60,50 70,20 85,50" fill="#FFB6C1"/>
+  <polygon points="140,50 130,20 115,50" fill="#FFB6C1"/>
+  <polygon points="65,45 72,28 80,48" fill="#FF69B4"/>
+  <polygon points="135,45 128,28 120,48" fill="#FF69B4"/>
+  <!-- 眼睛 -->
+  <ellipse cx="85" cy="75" rx="8" ry="10" fill="#2D2D2D"/>
+  <ellipse cx="115" cy="75" rx="8" ry="10" fill="#2D2D2D"/>
+  <circle cx="83" cy="72" r="3" fill="white"/>
+  <circle cx="113" cy="72" r="3" fill="white"/>
+  <!-- 鼻子 -->
+  <ellipse cx="100" cy="90" rx="5" ry="4" fill="#FF69B4"/>
+  <!-- 嘴巴 -->
+  <path d="M 92 95 Q 100 102 108 95" stroke="#8B4513" stroke-width="2" fill="none"/>
+  <!-- 腮红 -->
+  <ellipse cx="70" cy="88" rx="8" ry="5" fill="#FF69B4" opacity="0.5"/>
+  <ellipse cx="130" cy="88" rx="8" ry="5" fill="#FF69B4" opacity="0.5"/>
+</svg>

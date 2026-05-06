@@ -1,0 +1,14 @@
+{
+  "name": "cat-cute",
+  "displayName": "Cute Cat",
+  "author": "agent-pet",
+  "version": "1.0.0",
+  "states": {
+    "idle": { "fps": 10, "frames": 12, "loop": true },
+    "idle_long": { "fps": 4, "frames": 8, "loop": true },
+    "working": { "fps": 10, "frames": 10, "loop": true },
+    "thinking": { "fps": 8, "frames": 9, "loop": true },
+    "success": { "fps": 12, "frames": 8, "loop": false },
+    "error": { "fps": 8, "frames": 10, "loop": false }
+  }
+}

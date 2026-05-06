@@ -1,0 +1,27 @@
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  <!-- 淡粉色背景 -->
+  <rect width="200" height="200" fill="#FFF0F5"/>
+  <!-- 身体 -->
+  <ellipse cx="100" cy="140" rx="45" ry="40" fill="#FFB6C1"/>
+  <!-- 头 -->
+  <circle cx="100" cy="85" r="42" fill="#FFB6C1"/>
+  <!-- 长耳朵 -->
+  <ellipse cx="75" cy="35" rx="12" ry="35" fill="#FFB6C1"/>
+  <ellipse cx="75" cy="35" rx="6" ry="25" fill="#FF69B4"/>
+  <ellipse cx="125" cy="35" rx="12" ry="35" fill="#FFB6C1"/>
+  <ellipse cx="125" cy="35" rx="6" ry="25" fill="#FF69B4"/>
+  <!-- 眼睛 -->
+  <ellipse cx="85" cy="80" rx="7" ry="9" fill="#2D2D2D"/>
+  <ellipse cx="115" cy="80" rx="7" ry="9" fill="#2D2D2D"/>
+  <circle cx="83" cy="77" r="2.5" fill="white"/>
+  <circle cx="113" cy="77" r="2.5" fill="white"/>
+  <!-- 鼻子 -->
+  <ellipse cx="100" cy="95" rx="5" ry="4" fill="#FF69B4"/>
+  <!-- 嘴巴 -->
+  <path d="M 93 100 Q 100 107 107 100" stroke="#8B4513" stroke-width="2" fill="none"/>
+  <!-- 腮红 -->
+  <ellipse cx="70" cy="92" rx="7" ry="4" fill="#FF69B4" opacity="0.5"/>
+  <ellipse cx="130" cy="92" rx="7" ry="4" fill="#FF69B4" opacity="0.5"/>
+  <!-- 兔牙 -->
+  <rect x="96" y="100" width="8" height="10" rx="2" fill="white" stroke="#DDDDDD" stroke-width="0.5"/>
+</svg>

@@ -35,4 +35,47 @@ program
     await restart();
   });
 
+program
+  .command('stop')
+  .description('Stop the desktop pet')
+  .action(async () => {
+    const { stop } = require('../src/commands/stop');
+    await stop();
+  });
+
+program
+  .command('skin')
+  .description('Switch or list skins')
+  .argument('[name]', 'Skin name to switch to')
+  .action(async (name) => {
+    const { skin } = require('../src/commands/skin');
+    await skin(name);
+  });
+
+program
+  .command('setting')
+  .description('Open settings UI')
+  .alias('settings')
+  .action(async () => {
+    const { setting } = require('../src/commands/setting');
+    await setting();
+  });
+
+program
+  .command('build')
+  .description('Build and install pet-desktop')
+  .action(async () => {
+    const { build } = require('../src/commands/build');
+    await build();
+  });
+
+program
+  .command('install-skin')
+  .description('Install a skin package')
+  .argument('<path>', 'Path to skin package directory or zip')
+  .action(async (skinPath) => {
+    const { installSkin } = require('../src/commands/install-skin');
+    await installSkin(skinPath);
+  });
+
 program.parse(process.argv);

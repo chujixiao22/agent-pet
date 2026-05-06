@@ -1,0 +1,85 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+      <!-- 背景：透明 -->
+      <rect width="200" height="200" fill="none"/>
+
+      <!-- 身体 - 根据状态调整 -->
+      
+    <ellipse cx="100" cy="110" rx="60" ry="55" fill="#FF8C42" transform="scale(1.05)"/>
+    <ellipse cx="100" cy="115" rx="50" ry="40" fill="#E67E22" transform="scale(1.05)"/>
+  
+
+      <!-- 肚子 -->
+      
+    <ellipse cx="100" cy="125" rx="40" ry="30" fill="#FFE4B5" transform="scale(1.03)"/>
+  
+
+      <!-- 耳朵 -->
+      
+    <!-- 左耳 -->
+    <ellipse cx="55" cy="60" rx="18" ry="25" fill="#FF8C42"
+            transform="rotate(-14.999999999999998deg, 55, 70)"/>
+    <ellipse cx="55" cy="63" rx="10" ry="15" fill="#FFB6C1"
+            transform="rotate(-14.999999999999998deg, 55, 70)"/>
+
+    <!-- 右耳 -->
+    <ellipse cx="145" cy="60" rx="18" ry="25" fill="#FF8C42"
+            transform="rotate(14.999999999999998deg, 145, 70)"/>
+    <ellipse cx="145" cy="63" rx="10" ry="15" fill="#FFB6C1"
+            transform="rotate(14.999999999999998deg, 145, 70)"/>
+  
+
+      <!-- 眼睛 -->
+      
+    <!-- 左眼外圈 -->
+    <ellipse cx="80" cy="97.99248495981216" rx="12" ry="15" fill="white"/>
+    
+      <!-- 左眼球 -->
+      <circle cx="80" cy="97.99248495981216" r="6" fill="#2C3E50"/>
+      <!-- 左眼高光 -->
+      <circle cx="78" cy="95.99248495981216" r="2" fill="#FFFFFF"/>
+    
+
+    <!-- 右眼外圈 -->
+    <ellipse cx="120" cy="97.99248495981216" rx="12" ry="15" fill="white"/>
+    
+      <!-- 右眼球 -->
+      <circle cx="120" cy="97.99248495981216" r="6" fill="#2C3E50"/>
+      <!-- 右眼高光 -->
+      <circle cx="118" cy="95.99248495981216" r="2" fill="#FFFFFF"/>
+    
+  
+
+      <!-- 鼻子 -->
+      
+    <ellipse cx="100" cy="110" rx="6" ry="5" fill="#FF6B6B" transform="scale(1.0783326909627484)"/>
+  
+
+      <!-- 腮红 -->
+      
+    <ellipse cx="70" cy="115" rx="8" ry="5" fill="#FFB347" opacity="0.8129284946790071"/>
+    <ellipse cx="130" cy="115" rx="8" ry="5" fill="#FFB347" opacity="0.8129284946790071"/>
+  
+
+      <!-- 嘴巴 -->
+      <circle cx="100" cy="118" r="3" fill="none" stroke="#8B7355" stroke-width="2"/>
+
+      <!-- 胡须 -->
+      
+    <!-- 左侧胡须 -->
+    <line x1="50" y1="105" x2="20" y2="102.99248495981216" stroke="#8B7355" stroke-width="2" opacity="0.8349980728882449"/>
+    <line x1="50" y1="110" x2="20" y2="112.99248495981216" stroke="#8B7355" stroke-width="2" opacity="0.8349980728882449"/>
+    <line x1="50" y1="115" x2="20" y2="117.99248495981216" stroke="#8B7355" stroke-width="2" opacity="0.8349980728882449"/>
+
+    <!-- 右侧胡须 -->
+    <line x1="150" y1="105" x2="180" y2="102.99248495981216" stroke="#8B7355" stroke-width="2" opacity="0.8349980728882449"/>
+    <line x1="150" y1="110" x2="180" y2="112.99248495981216" stroke="#8B7355" stroke-width="2" opacity="0.8349980728882449"/>
+    <line x1="150" y1="115" x2="180" y2="117.99248495981216" stroke="#8B7355" stroke-width="2" opacity="0.8349980728882449"/>
+  
+
+      <!-- 特效 -->
+      
+        <!-- 思考气泡 -->
+        <ellipse cx="160" cy="40" rx="30" ry="25" fill="rgba(255,255,255,0.9796117257901679)" stroke="#4169E1" stroke-width="2"/>
+        <text x="150" y="48" font-size="18" fill="#4169E1" font-weight="bold">??</text>
+      
+    </svg>
