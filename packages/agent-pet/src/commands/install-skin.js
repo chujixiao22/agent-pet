@@ -8,7 +8,8 @@ async function installSkin(skinPath) {
     return;
   }
 
-  const skinsDir = path.join(os.homedir(), '.agent-pet', 'skins');
+  // pet-desktop 使用 ~/.claw-pet/skins/
+  const skinsDir = path.join(os.homedir(), '.claw-pet', 'skins');
   const skinName = path.basename(skinPath);
   const destPath = path.join(skinsDir, skinName);
 
@@ -20,8 +21,8 @@ async function installSkin(skinPath) {
   // Copy skin
   copyDir(skinPath, destPath);
 
-  console.log('Skin installed to: ' + destPath);
-  console.log('Use agent-pet skin ' + skinName + ' to activate');
+  console.log('✅ Skin installed to: ' + destPath);
+  console.log('ℹ️  Run agent-pet skin ' + skinName + ' to activate');
 }
 
 function copyDir(src, dest) {

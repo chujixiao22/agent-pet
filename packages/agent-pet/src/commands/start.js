@@ -7,7 +7,7 @@ async function start() {
 
   // 查找 pet-desktop 目录
   const possiblePaths = [
-    path.join(__dirname, '../../../pets/pet-desktop'),
+    path.join(__dirname, '../../../../pets/pet-desktop'),
     path.join(process.cwd(), 'pets/pet-desktop'),
     path.join(os.homedir(), '.agent-pet/pets/pet-desktop')
   ];
@@ -45,30 +45,33 @@ async function start() {
   const electronPath = path.join(nodeModulesPath, '.bin/electron');
   const mainPath = path.join(desktopPath, 'src/main.js');
 
-  // Windows 环境变量处理
-  const spawnOpts = process.platform === 'win32'
-    ? { shell: true, stdio: 'inherit' }
-    : { stdio: 'inherit' };
-
   // 移除 ELECTRON_RUN_AS_NODE 环境变量
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
 
-  const child = spawn(electronPath, [mainPath], {
-    ...spawnOpts,
-    env,
-    cwd: desktopPath
-  });
+  if (process.platform === 'win32') {
+    // Windows: 直接启动 electron
+    const electronExe = path.join(nodeModulesPath, 'electron/dist/electron.exe');
+    spawn(electronExe, [mainPath], {
+      cwd: desktopPath,
+      env,
+      detached: true,
+      stdio: 'ignore'
+    }).unref();
+  } else {
+    spawn(electronPath, [mainPath], {
+      detached: true,
+      env,
+      cwd: desktopPath,
+      stdio: 'ignore'
+    }).unref();
+  }
 
-  child.on('error', (err) => {
-    console.error('❌ Failed to start:', err.message);
-  });
+  console.log('✅ Desktop pet started in background');
 
-  child.on('close', (code) => {
-    if (code !== 0) {
-      console.log(`❌ Pet exited with code ${code}`);
-    }
-  });
+  // 等待一小段时间让进程启动
+  await new Promise(r => setTimeout(r, 500));
+  process.exit(0);
 }
 
 module.exports = { start };

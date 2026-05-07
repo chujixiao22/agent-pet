@@ -89,6 +89,9 @@ class Pet {
         }
       });
     }
+
+    // Apply theme
+    document.documentElement.setAttribute('data-theme', config.theme || 'light');
   }
 
   async loadAllSprites() {
@@ -304,25 +307,42 @@ class Pet {
   }
 }
 
-// Task list renderer
+// Task list renderer - unified view for tasks AND sessions
 class TaskList {
   constructor() {
     this.panel = document.getElementById('task-panel');
+    this.tasks = [];
+    this.sessions = [];
   }
 
-  render(tasks) {
-    if (!tasks || tasks.length === 0) {
-      this.panel.classList.remove('visible');
-      this.panel.innerHTML = '';
-      return;
-    }
+  setTasks(tasks) {
+    this.tasks = tasks || [];
+    this.render();
+  }
+
+  setSessions(sessions) {
+    this.sessions = sessions || [];
+    this.render();
+  }
+
+  render() {
+    // Combine tasks and sessions
+    const allItems = [
+      ...this.tasks.map(t => ({ ...t, itemType: 'task' })),
+      ...this.sessions.map(s => ({ ...s, itemType: 'session' }))
+    ];
 
     this.panel.classList.add('visible');
     this.panel.innerHTML = '';
 
-    for (const task of tasks) {
-      const item = document.createElement('div');
-      item.className = `task-item ${task.status}`;
+    for (const item of allItems) {
+      const div = document.createElement('div');
+      // Use status for display, state is only for pet animation
+      const itemStatus = item.status || 'running';
+      div.className = `task-item ${itemStatus}`;
+      div.dataset.type = item.itemType;  // 'task' or 'session'
+      div.dataset.id = item.id;
+      div.dataset.cwd = item.cwd || '';
 
       const indicator = document.createElement('div');
       indicator.className = 'task-indicator';
@@ -335,63 +355,82 @@ class TaskList {
 
       const project = document.createElement('span');
       project.className = 'task-project';
-      project.textContent = this.extractProjectName(task.cwd);
+      project.textContent = this.extractProjectName(item.cwd);
 
       header.appendChild(project);
 
-      // Badge for completed tasks
-      if (task.status === 'completed') {
-        const check = document.createElement('span');
-        check.className = 'task-badge';
-        check.textContent = '✓';
-        header.appendChild(check);
-      }
-
-      // Red X for interrupted tasks
-      if (task.status === 'interrupted') {
-        const x = document.createElement('span');
-        x.className = 'task-badge';
-        x.textContent = '✗';
-        x.style.color = 'rgba(239, 83, 80, 0.8)';
-        header.appendChild(x);
+      // Badge for type (A/M) or status
+      if (item.itemType === 'session') {
+        // Sessions show type badge (Auto/Manual)
+        const typeBadge = document.createElement('span');
+        typeBadge.className = 'task-badge';
+        typeBadge.textContent = item.type === 'auto' ? 'A' : 'M';
+        typeBadge.title = item.type === 'auto' ? 'Auto Task' : 'Manual Session';
+        header.appendChild(typeBadge);
       }
 
       content.appendChild(header);
 
       // Summary line
-      if (task.lastToolSummary) {
+      if (item.lastToolSummary) {
         const summary = document.createElement('div');
         summary.className = 'task-summary';
-        if (task.status === 'completed') {
-          summary.textContent = '✓ ' + task.lastToolSummary;
+        if (item.status === 'completed') {
+          summary.textContent = '✓ ' + item.lastToolSummary;
         } else {
-          summary.textContent = task.lastToolSummary;
+          summary.textContent = item.lastToolSummary;
         }
         content.appendChild(summary);
       }
 
-      item.appendChild(indicator);
-      item.appendChild(content);
+      div.appendChild(content);
 
-      // Dismiss button for completed tasks
-      if (task.status === 'completed') {
-        const dismissBtn = document.createElement('button');
-        dismissBtn.className = 'task-dismiss';
-        dismissBtn.textContent = '×';
-        dismissBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          window.electronAPI.dismissTask(task.id);
-        });
-        item.appendChild(dismissBtn);
-      }
-
-      // Click to open project in VSCode
-      item.addEventListener('click', () => {
-        window.electronAPI.openProject(task.cwd);
+      // Single click handler - distinguish by type
+      div.addEventListener('click', () => {
+        console.log('[Renderer] Click on item:', item.itemType, item.id);
+        if (item.itemType === 'task') {
+          window.electronAPI.openProject(item.cwd);
+        } else {
+          // session - open terminal window
+          window.electronAPI.openTerminalClient(item.id);
+        }
       });
 
-      this.panel.appendChild(item);
+      // Close button for all items
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'kill-btn';
+      closeBtn.textContent = '×';
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (item.itemType === 'session') {
+          window.electronAPI.claudeKill(item.id);
+        } else {
+          window.electronAPI.dismissTask(item.id);
+        }
+      });
+      div.appendChild(closeBtn);
+
+      this.panel.appendChild(div);
     }
+
+    // Add button at bottom
+    const addRow = document.createElement('div');
+    addRow.className = 'add-row';
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'add-btn';
+    addBtn.textContent = '+';
+
+    addBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const cwd = await window.electronAPI.selectWorkingDirectory();
+      if (cwd) {
+        await window.electronAPI.claudeSpawn(cwd);
+      }
+    });
+
+    addRow.appendChild(addBtn);
+    this.panel.appendChild(addRow);
   }
 
   extractProjectName(cwd) {
@@ -409,8 +448,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Listen for task updates from main process
   window.electronAPI.onTasksUpdate((tasks) => {
-    taskList.render(tasks);
+    taskList.setTasks(tasks);
     pet.updateTasks(tasks);
+  });
+
+  // Listen for sessions updates from main process
+  window.electronAPI.onSessionsUpdate((sessions) => {
+    taskList.setSessions(sessions);
   });
 
   // Listen for skin config from main process
