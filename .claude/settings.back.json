@@ -1,26 +1,113 @@
 {
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "4813af2f95cd422c8a040b209cbeb4a4.gEYmRfzcI69GFvDv",
+    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+  },
   "permissions": {
     "allow": [
-      "Bash(docker run:*)",
-      "Bash(docker pull:*)",
-      "mcp__plugin_playwright_playwright__browser_navigate",
-      "Bash(npx tsc:*)",
-      "Bash(npm run type-check:*)",
-      "Bash(Get-Content backend.log -Tail 50)",
-      "Bash(Select-String:*)",
-      "Bash(Select-String -Pattern \"p3.md\")",
-      "Bash(npm run build:*)"
+      "Bash(dir f:/temp/)",
+      "Bash(node .claude/skills/email-report/html-to-inline.js \"f:/temp/reports/简报_BARF_2026-04-17_raw.html\" \"f:/temp/reports/简报_BARF_2026-04-17.html\")",
+      "Bash(node .claude/skills/tencent-cos-upload/index.js \"f:/temp/reports/简报_BARF_2026-04-17.md\" \"lingxi-report-brief/BARF/Wed Apr 15 2026 08:00:00 GMT+0800 \\(中国标准时间\\)/brief.md\")",
+      "Bash(node .claude/skills/tencent-cos-upload/index.js \"f:/temp/reports/简报_BARF_2026-04-17.html\" \"lingxi-report-brief/BARF/Wed Apr 15 2026 08:00:00 GMT+0800 \\(中国标准时间\\)/brief.html\")",
+      "Bash(ping open.bigmodel.cn -n 4)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('C:/Users/kezun/.claude/settings.json','utf-8'\\)\\); console.log\\('Valid JSON'\\)\")"
     ]
   },
-  "env": {
-    "ANTHROPIC_BASE_URL": "https://api.minimaxi.com/anthropic",
-    "ANTHROPIC_AUTH_TOKEN": "sk-cp-Q0OT0DXTp2na1JIBuEzml3b4t9vYXIy8e1llu-yp0J9WKZD1qVnaVSUBXlnLsLo5yKmqph7bhGHm_QysA2kywuZygQSwHfPP9qegB53UOi7kgJA4WtE-8Fs",
-    "API_TIMEOUT_MS": "3000000",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
-    "ANTHROPIC_MODEL": "MiniMax-M2.7-highspeed",
-    "ANTHROPIC_SMALL_FAST_MODEL": "MiniMax-M2.7-highspeed",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "MiniMax-M2.7-highspeed",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "MiniMax-M2.7-highspeed",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "MiniMax-M2.7-highspeed"
-  }
+  "model": "glm-5.1",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node ~/.agent-pet/hooks/pet-hook.js",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node ~/.agent-pet/hooks/pet-hook.js",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node ~/.agent-pet/hooks/pet-hook.js",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node ~/.agent-pet/hooks/pet-hook.js",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node ~/.agent-pet/hooks/pet-hook.js",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node ~/.agent-pet/hooks/pet-hook.js",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node ~/.agent-pet/hooks/pet-hook.js",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "skipDangerousModePermissionPrompt": true
 }
