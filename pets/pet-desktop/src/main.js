@@ -3,7 +3,6 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { exec, spawn } = require('child_process');
-const http = require('http');
 
 // Default animation config (fallback for missing states)
 const DEFAULT_ANIMATION_CONFIG = {
@@ -121,158 +120,8 @@ let dragInterval = null;
 let dragStartMouse = { x: 0, y: 0 };
 let dragStartWindow = { x: 0, y: 0 };
 let wsMap = {}; // sessionId -> WebSocket
-let hookTasks = []; // In-memory tasks from HTTP hooks
-let hookServer = null; // HTTP hook server instance
 
-// Build tool summary from hook event
-function buildSummary(toolName, toolInput) {
-  switch (toolName) {
-    case 'Bash':
-      return 'Bash: ' + (toolInput.command || '').slice(0, 60);
-    case 'Edit':
-    case 'Write':
-    case 'Read':
-      return toolName + ': ' + (toolInput.file_path || '');
-    case 'Agent':
-      return 'Agent: ' + (toolInput.description || '').slice(0, 50);
-    default:
-      return toolName;
-  }
-}
 
-// Process incoming hook event and update hookTasks
-function processHookEvent(data) {
-  const sessionId = data.session_id || 'unknown';
-  const cwd = data.cwd || '';
-  const toolName = data.tool_name || '';
-  const hookEvent = data.hook_event_name || '';
-  const timestamp = new Date().toISOString();
-
-  if (toolName) {
-    // PreToolUse/PostToolUse
-    const summary = buildSummary(toolName, data.tool_input || {});
-    const existing = hookTasks.find(t => t.id === sessionId);
-    if (existing) {
-      if (existing.status !== 'completed' && existing.status !== 'interrupted' && existing.status !== 'waiting') {
-        existing.status = 'working';
-        existing.completedAt = null;
-      }
-      existing.lastActivity = timestamp;
-      existing.toolCount = (existing.toolCount || 0) + 1;
-      existing.lastTool = toolName;
-      existing.lastToolSummary = summary;
-    } else {
-      hookTasks.push({
-        id: sessionId, cwd: cwd,
-        status: toolName === 'AskUserQuestion' ? 'waiting' : 'working',
-        startedAt: timestamp, lastActivity: timestamp,
-        toolCount: 1, lastTool: toolName, lastToolSummary: summary, completedAt: null
-      });
-    }
-  } else if (data.message || data.notification_type) {
-    // Notification
-    const existing = hookTasks.find(t => t.id === sessionId);
-    if (existing && existing.status !== 'completed' && existing.status !== 'interrupted') {
-      existing.status = 'waiting';
-      existing.lastActivity = timestamp;
-      existing.waitingMessage = (data.message || '').slice(0, 80);
-    }
-  } else if (hookEvent === 'PermissionRequest' || data.permission_required) {
-    // Permission request
-    const existing = hookTasks.find(t => t.id === sessionId);
-    if (existing && existing.status !== 'completed' && existing.status !== 'interrupted') {
-      existing.status = 'waiting';
-      existing.lastActivity = timestamp;
-      existing.lastToolSummary = data.permission_required
-        ? ('Permission: ' + String(data.permission_required).slice(0, 40))
-        : 'Permission required';
-    }
-  } else if (data.prompt !== undefined) {
-    // UserPromptSubmit
-    const existing = hookTasks.find(t => t.id === sessionId);
-    if (!existing) {
-      hookTasks.push({
-        id: sessionId, cwd: cwd, status: 'working',
-        startedAt: timestamp, lastActivity: timestamp,
-        toolCount: 0, lastTool: '', lastToolSummary: 'Processing...', completedAt: null
-      });
-    } else {
-      existing.status = 'working';
-      existing.lastActivity = timestamp;
-      existing.completedAt = null;
-    }
-  } else if (hookEvent === 'StopFailure') {
-    const existing = hookTasks.find(t => t.id === sessionId);
-    if (existing) {
-      existing.status = 'interrupted';
-      existing.completedAt = timestamp;
-      existing.lastActivity = timestamp;
-      existing.lastToolSummary = 'Interrupted';
-    }
-  } else {
-    // Stop event
-    const existing = hookTasks.find(t => t.id === sessionId);
-    if (existing) {
-      existing.status = 'completed';
-      existing.completedAt = timestamp;
-      existing.lastActivity = timestamp;
-    }
-  }
-
-  // Sort and limit to 10
-  const statusOrder = { working: 0, waiting: 0, interrupted: 1, completed: 2 };
-  hookTasks.sort((a, b) => {
-    const ao = statusOrder[a.status] !== undefined ? statusOrder[a.status] : 3;
-    const bo = statusOrder[b.status] !== undefined ? statusOrder[b.status] : 3;
-    if (ao !== bo) return ao - bo;
-    return new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime();
-  });
-  hookTasks = hookTasks.slice(0, 10);
-}
-
-// Start HTTP server to receive Claude Code hook events
-function startHookServer() {
-  hookServer = http.createServer((req, res) => {
-    if (req.method === 'GET' && req.url === '/api/health') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
-      return;
-    }
-
-    if (req.method === 'POST' && req.url === '/api/hook') {
-      let body = '';
-      req.on('data', chunk => { body += chunk; });
-      req.on('end', () => {
-        try {
-          const data = JSON.parse(body || '{}');
-          processHookEvent(data);
-          refreshAll();
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ status: 'ok' }));
-        } catch (e) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Invalid JSON' }));
-        }
-      });
-      return;
-    }
-
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Not found' }));
-  });
-
-  hookServer.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.error('[HookServer] Port 17654 is already in use, HTTP hook server not started');
-    } else {
-      console.error('[HookServer] Server error:', err.message);
-    }
-  });
-
-  hookServer.listen(17654, () => {
-    console.log('[HookServer] Listening on port 17654');
-  });
-}
 
 // Initialize skin configuration
 const skinName = getSkinName();
@@ -282,7 +131,6 @@ const skinSpritePath = getSkinSpritePath(skinName);
 console.log(`[DesktopPet] Loading skin: ${skinConfig.displayName} (${skinName})`);
 
 // Task watching
-const TASK_EVENTS_PATH = path.join(os.homedir(), '.agent-pet', 'task-events.json');
 let taskPollInterval = null;
 
 
@@ -365,27 +213,16 @@ async function refreshAll() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
   try {
-    // Fetch tasks from file (fallback)
-    let fileTasks = [];
+    // Fetch hook tasks from terminal-server
+    let hookTasks = [];
     try {
-      if (fs.existsSync(TASK_EVENTS_PATH)) {
-        const data = fs.readFileSync(TASK_EVENTS_PATH, 'utf-8');
-        const parsed = JSON.parse(data);
-        if (parsed && Array.isArray(parsed.tasks)) {
-          fileTasks = parsed.tasks;
-        }
-      }
-    } catch (err) {}
+      const hookResp = await fetch('http://localhost:3456/api/hooks');
+      hookTasks = await hookResp.json();
+    } catch (e) {}
 
-    // Merge: hookTasks (HTTP) priority over fileTasks
-    const mergedMap = new Map();
-    for (const t of fileTasks) { mergedMap.set(t.id, t); }
-    for (const t of hookTasks) { mergedMap.set(t.id, t); }
-    const tasks = Array.from(mergedMap.values());
-
-    // Sort merged tasks
+    // Sort hook tasks
     const statusOrder = { working: 0, waiting: 0, interrupted: 1, completed: 2 };
-    tasks.sort((a, b) => {
+    hookTasks.sort((a, b) => {
       const ao = statusOrder[a.status] !== undefined ? statusOrder[a.status] : 3;
       const bo = statusOrder[b.status] !== undefined ? statusOrder[b.status] : 3;
       if (ao !== bo) return ao - bo;
@@ -401,12 +238,12 @@ async function refreshAll() {
 
     // Send updates to renderer - filter out tasks that have corresponding sessions
     const sessionIds = new Set(sessions.map(s => s.id));
-    const filteredTasks = tasks.filter(t => !sessionIds.has(t.id));
+    const filteredTasks = hookTasks.filter(t => !sessionIds.has(t.id));
     mainWindow.webContents.send('tasks-update', filteredTasks.slice(0, 5));
 
     // Build task lookup by id
     const taskById = {};
-    for (const t of tasks) {
+    for (const t of hookTasks) {
       taskById[t.id] = t;
     }
 
@@ -426,7 +263,7 @@ async function refreshAll() {
     mainWindow.webContents.send('sessions-update', mapped);
 
     // Resize window
-    const totalItems = tasks.length + sessions.length;
+    const totalItems = hookTasks.length + sessions.length;
     const itemHeight = 40;
     const addButtonHeight = 52;
     const maxItems = Math.min(totalItems, 8);
@@ -444,7 +281,6 @@ async function refreshAll() {
 
 app.whenReady().then(() => {
   createWindow();
-  startHookServer();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -463,10 +299,6 @@ app.on('before-quit', () => {
   if (taskPollInterval) {
     clearInterval(taskPollInterval);
     taskPollInterval = null;
-  }
-  if (hookServer) {
-    hookServer.close();
-    hookServer = null;
   }
 });
 
@@ -513,21 +345,9 @@ ipcMain.on('open-project', (event, cwd) => {
 
 // Dismiss a completed task
 ipcMain.on('dismiss-task', (event, taskId) => {
-  // Remove from in-memory hookTasks
-  hookTasks = hookTasks.filter(t => t.id !== taskId);
-  // Also remove from file-based tasks
-  try {
-    if (fs.existsSync(TASK_EVENTS_PATH)) {
-      const data = fs.readFileSync(TASK_EVENTS_PATH, 'utf-8');
-      const parsed = JSON.parse(data);
-      if (parsed && Array.isArray(parsed.tasks)) {
-        parsed.tasks = parsed.tasks.filter(t => t.id !== taskId);
-        fs.writeFileSync(TASK_EVENTS_PATH, JSON.stringify(parsed, null, 2), 'utf-8');
-      }
-    }
-  } catch (err) {
-    console.error('Failed to dismiss task:', err);
-  }
+  // Dismiss via terminal-server
+  fetch(`http://localhost:3456/api/hooks/${taskId}`, { method: 'DELETE' })
+    .catch(() => {});
   refreshAll();
 });
 

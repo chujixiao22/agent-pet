@@ -19,6 +19,9 @@ const terminals = new Map(); // sessionId -> { pty, ws, pid }
 const sessions = new Map(); // sessionId -> { id, cwd, pid, status, toolCount, lastToolSummary, state }
 const outputBuffers = new Map(); // sessionId -> string[] (for reconnection)
 
+// Hook events from external Claude Code sessions (VSCode, CLI, etc.)
+const hookTasks = new Map(); // sessionId -> { id, cwd, status, startedAt, lastActivity, toolCount, lastTool, lastToolSummary, completedAt }
+
 // State detection patterns
 const STATE_PATTERNS = {
   thinking: /thinking|思考|thought/i,
@@ -95,6 +98,90 @@ function updateSessionState(sessionId, data) {
       const toolName = match[1] || match[2] || 'unknown';
       session.lastToolSummary = toolName;
       session.toolCount = (session.toolCount || 0) + 1;
+    }
+  }
+}
+
+function buildHookSummary(toolName, toolInput) {
+  switch (toolName) {
+    case 'Bash': return 'Bash: ' + (toolInput.command || '').slice(0, 60);
+    case 'Edit':
+    case 'Write':
+    case 'Read': return toolName + ': ' + (toolInput.file_path || '');
+    case 'Agent': return 'Agent: ' + (toolInput.description || '').slice(0, 50);
+    default: return toolName;
+  }
+}
+
+function processHookEvent(data) {
+  const sessionId = data.session_id || 'unknown';
+  const cwd = data.cwd || '';
+  const toolName = data.tool_name || '';
+  const hookEvent = data.hook_event_name || '';
+  const timestamp = new Date().toISOString();
+
+  if (toolName) {
+    const summary = buildHookSummary(toolName, data.tool_input || {});
+    const existing = hookTasks.get(sessionId);
+    if (existing) {
+      if (existing.status !== 'completed' && existing.status !== 'interrupted' && existing.status !== 'waiting') {
+        existing.status = 'working';
+        existing.completedAt = null;
+      }
+      existing.lastActivity = timestamp;
+      existing.toolCount = (existing.toolCount || 0) + 1;
+      existing.lastTool = toolName;
+      existing.lastToolSummary = summary;
+    } else {
+      hookTasks.set(sessionId, {
+        id: sessionId, cwd, 
+        status: toolName === 'AskUserQuestion' ? 'waiting' : 'working',
+        startedAt: timestamp, lastActivity: timestamp,
+        toolCount: 1, lastTool: toolName, lastToolSummary: summary, completedAt: null
+      });
+    }
+  } else if (data.message || data.notification_type) {
+    const existing = hookTasks.get(sessionId);
+    if (existing && existing.status !== 'completed' && existing.status !== 'interrupted') {
+      existing.status = 'waiting';
+      existing.lastActivity = timestamp;
+      existing.waitingMessage = (data.message || '').slice(0, 80);
+    }
+  } else if (hookEvent === 'PermissionRequest' || data.permission_required) {
+    const existing = hookTasks.get(sessionId);
+    if (existing && existing.status !== 'completed' && existing.status !== 'interrupted') {
+      existing.status = 'waiting';
+      existing.lastActivity = timestamp;
+      existing.lastToolSummary = 'Permission required';
+    }
+  } else if (data.prompt !== undefined) {
+    const existing = hookTasks.get(sessionId);
+    if (!existing) {
+      hookTasks.set(sessionId, {
+        id: sessionId, cwd, status: 'working',
+        startedAt: timestamp, lastActivity: timestamp,
+        toolCount: 0, lastTool: '', lastToolSummary: 'Processing...', completedAt: null
+      });
+    } else {
+      existing.status = 'working';
+      existing.lastActivity = timestamp;
+      existing.completedAt = null;
+    }
+  } else if (hookEvent === 'StopFailure') {
+    const existing = hookTasks.get(sessionId);
+    if (existing) {
+      existing.status = 'interrupted';
+      existing.completedAt = timestamp;
+      existing.lastActivity = timestamp;
+      existing.lastToolSummary = 'Interrupted';
+    }
+  } else {
+    // Stop event
+    const existing = hookTasks.get(sessionId);
+    if (existing) {
+      existing.status = 'completed';
+      existing.completedAt = timestamp;
+      existing.lastActivity = timestamp;
     }
   }
 }
@@ -354,6 +441,16 @@ function broadcastSessions() {
   }
 }
 
+function broadcastHookUpdate() {
+  const tasks = Array.from(hookTasks.values());
+  const message = frame(FRAME_JSON, JSON.stringify({ type: 'hook-update', tasks }));
+  for (const [, term] of terminals) {
+    if (term.ws && term.ws.readyState === WebSocket.OPEN) {
+      term.ws.send(message);
+    }
+  }
+}
+
 // API endpoints
 app.get('/api/sessions', (req, res) => {
   res.json(Array.from(sessions.values()));
@@ -415,6 +512,38 @@ app.post('/api/sessions', (req, res) => {
 app.delete('/api/sessions/:id', (req, res) => {
   const { id } = req.params;
   killSession(id);
+  res.json({ success: true });
+});
+
+// Receive Claude Code hook events
+app.post('/api/hook', (req, res) => {
+  try {
+    processHookEvent(req.body);
+    broadcastHookUpdate();
+    res.json({ status: 'ok' });
+  } catch (err) {
+    res.json({ status: 'ok' }); // Always return ok to avoid Claude Code errors
+  }
+});
+
+// Get hook-tracked tasks
+app.get('/api/hooks', (req, res) => {
+  const tasks = Array.from(hookTasks.values());
+  // Sort: working/waiting first, then interrupted, then completed
+  const statusOrder = { working: 0, waiting: 0, interrupted: 1, completed: 2 };
+  tasks.sort((a, b) => {
+    const ao = statusOrder[a.status] !== undefined ? statusOrder[a.status] : 3;
+    const bo = statusOrder[b.status] !== undefined ? statusOrder[b.status] : 3;
+    if (ao !== bo) return ao - bo;
+    return new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime();
+  });
+  res.json(tasks.slice(0, 10));
+});
+
+// Dismiss a hook task
+app.delete('/api/hooks/:id', (req, res) => {
+  hookTasks.delete(req.params.id);
+  broadcastHookUpdate();
   res.json({ success: true });
 });
 
