@@ -13,5 +13,5 @@ build/
 .cache/
 .temp/
 *.png
-!pets/pet-client/animation-preview/frames/*/
+!pets/pet-desktop/assets/sprites/**/*.png
 {}
