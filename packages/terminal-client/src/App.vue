@@ -75,8 +75,7 @@ export default {
           ws.send(frame(FRAME_JSON, JSON.stringify({ type: 'init', sessionId: urlSessionId })));
         } else {
           // Create new session in current directory
-          const cwd = process.cwd ? process.cwd() : '.';
-          ws.send(frame(FRAME_JSON, JSON.stringify({ type: 'create', cwd })));
+          ws.send(frame(FRAME_JSON, JSON.stringify({ type: 'create' })));
         }
       };
 
@@ -179,7 +178,8 @@ export default {
           background: '#1e1e1e',
           foreground: '#d4d4d4'
         },
-        unicode: '11'
+        unicode: '11',
+        allowProposedApi: true
       });
 
       fitAddon = new FitAddon();
