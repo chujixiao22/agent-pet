@@ -2,11 +2,11 @@
   "name": "default",
   "displayName": "默认皮肤",
   "states": {
-    "idle": { "fps": 8, "frames": 12, "loop": true },
-    "idle_long": { "fps": 4, "frames": 8, "loop": true },
-    "working": { "fps": 10, "frames": 10, "loop": true },
-    "thinking": { "fps": 6, "frames": 9, "loop": true },
-    "success": { "fps": 8, "frames": 8, "loop": false },
-    "error": { "fps": 8, "frames": 10, "loop": false }
+    "idle": { "fps": 8, "frames": 8, "loop": true },
+    "idle_long": { "fps": 4, "frames": 6, "loop": true },
+    "working": { "fps": 10, "frames": 8, "loop": true },
+    "thinking": { "fps": 6, "frames": 6, "loop": true },
+    "success": { "fps": 8, "frames": 6, "loop": false },
+    "error": { "fps": 8, "frames": 8, "loop": false }
   }
 }

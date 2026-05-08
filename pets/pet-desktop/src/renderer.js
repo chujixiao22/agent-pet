@@ -44,6 +44,7 @@ class Pet {
     this.sprite = document.getElementById('pet-sprite');
     this.container = document.getElementById('pet-container');
     this.taskDriven = false;
+    this.successShown = false;
     this.spritePath = DEFAULT_SPRITE_PATH;
     this.animationConfig = { ...DEFAULT_ANIMATION_CONFIG };
 
@@ -105,7 +106,7 @@ class Pet {
       for (let i = 1; i <= config.frames; i++) {
         const frameNum = String(i).padStart(3, '0');
         const img = new Image();
-        const src = `${this.spritePath}/${state}/frame_${frameNum}.svg`;
+        const src = `${this.spritePath}/${state}/frame_${frameNum}.png`;
 
         try {
           await new Promise((resolve, reject) => {
@@ -280,25 +281,31 @@ class Pet {
     } else if (activeTasks.length >= 4) {
       // 4+ 活跃任务 → 高负荷 thinking 动画
       this.taskDriven = true;
+      this.successShown = false;
       if (this.currentState !== STATES.THINKING) {
         this.setState(STATES.THINKING);
       }
     } else if (activeTasks.length > 0) {
       // 1-3 个活跃任务 → working 动画
       this.taskDriven = true;
+      this.successShown = false;
       if (this.currentState !== STATES.WORKING) {
         this.setState(STATES.WORKING);
       }
-    } else if (allDone) {
-      // 全部完成 → success 动画
+    } else if (allDone && !this.successShown) {
+      // 全部完成 → success 动画（只播一次）
       this.taskDriven = true;
+      this.successShown = true;
       if (this.currentState !== STATES.SUCCESS) {
         this.setState(STATES.SUCCESS);
       }
     } else if (tasks.length === 0) {
-      // 无任务 → 交回给 auto-switch，重置 idle 计时器
+      // 无任务 → 交回给 auto-switch，仅在从有任务变为无任务时重置 idle 计时器
+      if (this.taskDriven) {
+        this.idleDuration = 0;
+      }
       this.taskDriven = false;
-      this.idleDuration = 0;
+      this.successShown = false;
     }
   }
 

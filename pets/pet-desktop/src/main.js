@@ -263,13 +263,13 @@ async function refreshAll() {
     mainWindow.webContents.send('sessions-update', mapped);
 
     // Resize window
-    const totalItems = hookTasks.length + sessions.length;
-    const itemHeight = 40;
-    const addButtonHeight = 52;
-    const maxItems = Math.min(totalItems, 8);
-    if (maxItems > 0) {
-      const panelHeight = maxItems * itemHeight + addButtonHeight + 8;
-      mainWindow.setSize(260, 150 + panelHeight);
+    const displayedItems = filteredTasks.length + mapped.length;
+    const itemHeight = 56;
+    const addButtonHeight = 48;
+    const panelPadding = 12;
+    if (displayedItems > 0) {
+      const panelHeight = displayedItems * itemHeight + addButtonHeight + panelPadding;
+      mainWindow.setSize(260, 140 + panelHeight);
     } else {
       mainWindow.setSize(260, 220);
     }
