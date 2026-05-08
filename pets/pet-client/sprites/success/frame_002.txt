@@ -1,7 +1,0 @@
-Frame 2 of success
-This is a placeholder for the success animation state.
-In a real implementation, this would be a PNG image.
-
-State: success
-Frame: 2
-Time: 2026-04-14T07:30:27.348Z
