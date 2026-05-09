@@ -159,7 +159,10 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 10px;
+      /* right padding reserves room for absolutely-positioned .kill-btn
+         (right: 8px + width: 20px + 4px buffer = 32px) so text content
+         never extends into the close-button zone */
+      padding: 8px 32px 8px 10px;
       border-radius: 6px;
       font-family: system-ui, -apple-system, sans-serif;
       font-size: 14px;
@@ -229,6 +232,7 @@
       height: 10px;
       border-radius: 50%;
       flex-shrink: 0;
+      position: relative;
     }
 
     .task-item.working .task-indicator {
@@ -321,6 +325,18 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      min-width: 0;
+      flex: 1;
+    }
+
+    /* second row of .task-content: wraps the tool summary text, fully clear
+       of the absolutely-positioned .kill-btn (the .task-item right padding
+       reserves the button's column). */
+    .task-summary-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
     }
 
     .task-item.completed .task-summary {
