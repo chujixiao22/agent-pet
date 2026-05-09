@@ -268,6 +268,11 @@ class Pet {
   }
 
   updateTasks(tasks) {
+    // approval-alert: track waiting state on body class for potential future hooks
+    // (no CSS currently consumes this — kept as a stable extension point)
+    const hasWaiting = Array.isArray(tasks) && tasks.some(t => t && t.status === 'waiting');
+    document.body.classList.toggle('has-waiting', hasWaiting);
+
     const activeTasks = tasks.filter(t => t.status === 'working' || t.status === 'waiting');
     const hasInterrupted = tasks.some(t => t.status === 'interrupted');
     const allDone = tasks.length > 0 && tasks.every(t => t.status === 'completed' || t.status === 'interrupted');
@@ -378,18 +383,25 @@ class TaskList {
 
       content.appendChild(header);
 
-      // Summary line
+      // Summary line — wraps the tool summary text. Placed in .task-content
+      // (NOT in .task-header) so it never collides with the absolutely-
+      // positioned .kill-btn pinned to the right edge of .task-item.
       if (item.lastToolSummary) {
-        const summary = document.createElement('div');
+        const summaryLine = document.createElement('div');
+        summaryLine.className = 'task-summary-line';
+
+        const summary = document.createElement('span');
         summary.className = 'task-summary';
         if (item.status === 'completed') {
           summary.textContent = '✓ ' + item.lastToolSummary;
         } else {
           summary.textContent = item.lastToolSummary;
         }
-        content.appendChild(summary);
+        summaryLine.appendChild(summary);
+        content.appendChild(summaryLine);
       }
 
+      div.appendChild(indicator);
       div.appendChild(content);
 
       // Single click handler - distinguish by type

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, screen, dialog } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, screen, dialog, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -121,6 +121,149 @@ let dragStartMouse = { x: 0, y: 0 };
 let dragStartWindow = { x: 0, y: 0 };
 let wsMap = {}; // sessionId -> WebSocket
 
+// approval-alert: track sessions that have already been notified during the
+// current waiting cycle. Cleared on exit of waiting state. Not persisted
+// across process restarts (acceptable per AC-6).
+//   key   = sessionId
+//   value = { notifiedAt: number, lastStatus: string, cwd: string }
+const notifiedSessions = new Map();
+
+// approval-alert: edge-triggered logging state. reconcileApprovalAlerts runs
+// every 1s; without these guards the badge / flashFrame log lines spam the
+// console on every poll. We only log when the observed value transitions.
+// Sentinels (-1, null) guarantee the first real value is always logged.
+let lastLoggedBadge = -1;
+let lastLoggedFlashOn = null;
+
+// approval-alert: extract project short name (last path segment) from cwd
+function extractProjectName(cwd) {
+  if (!cwd) return '';
+  const parts = String(cwd).replace(/\\/g, '/').split('/').filter(Boolean);
+  return parts[parts.length - 1] || '';
+}
+
+// approval-alert: build notification body following FR-1 fallback rules
+function buildApprovalNotificationBody(task) {
+  const project = extractProjectName(task && task.cwd);
+  const toolName = (task && task.lastTool) ? String(task.lastTool).trim() : '';
+  const message = (task && task.waitingMessage) ? String(task.waitingMessage).slice(0, 80).trim() : '';
+
+  if (!project) {
+    // cwd missing → drop project segment entirely
+    return 'A task is waiting for your approval';
+  }
+  if (!toolName && !message) {
+    return `[${project}] A task is waiting for your approval`;
+  }
+  if (toolName && message) {
+    return `[${project}] ${toolName}: ${message}`;
+  }
+  // Only one of toolName / message present
+  return `[${project}] ${toolName || message}`;
+}
+
+// approval-alert: pop a single OS notification for a freshly-entered waiting task
+function showApprovalNotification(task) {
+  if (!Notification.isSupported()) {
+    console.log('[approval-alert] Notification API unavailable, fallback to overlay+flash only');
+    return;
+  }
+  try {
+    const body = buildApprovalNotificationBody(task);
+    const n = new Notification({
+      title: 'Claude Code needs your approval',
+      body,
+      silent: false
+    });
+    n.on('click', () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    });
+    n.show();
+    console.log(`[approval-alert] notify session=${task && task.id} cwd=${task && task.cwd}`);
+  } catch (e) {
+    console.log(`[approval-alert] notification skipped: ${e.message}`);
+  }
+}
+
+// approval-alert: per-poll edge-detection driver. Consumes the unfiltered
+// hookTasks array (NOT renderer's filteredTasks) so notifications survive
+// the sessions-vs-hooks dedup that exists for UI purposes only.
+function reconcileApprovalAlerts(hookTasks) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  // 1. Build current waiting set from raw hook tasks
+  const currentWaiting = new Map();
+  if (Array.isArray(hookTasks)) {
+    for (const t of hookTasks) {
+      if (t && t.status === 'waiting' && t.id) {
+        currentWaiting.set(t.id, t);
+      }
+    }
+  }
+
+  // 2. Edge: entered waiting → notify (deduped per cycle by lastStatus check)
+  for (const [id, task] of currentWaiting) {
+    const prev = notifiedSessions.get(id);
+    if (!prev || prev.lastStatus !== 'waiting') {
+      showApprovalNotification(task);
+      notifiedSessions.set(id, {
+        notifiedAt: Date.now(),
+        lastStatus: 'waiting',
+        cwd: task.cwd || ''
+      });
+    }
+  }
+
+  // 3. Edge: exited waiting → drop tracking entry so next entry re-notifies
+  for (const id of [...notifiedSessions.keys()]) {
+    if (!currentWaiting.has(id)) {
+      notifiedSessions.delete(id);
+    }
+  }
+
+  // 4. flashFrame: keep flashing while any waiting task exists and the window
+  //    is unfocused. Stop only when no waiting tasks remain (focus event
+  //    handles the focus-driven stop separately, see createWindow()).
+  const hasWaiting = currentWaiting.size > 0;
+  try {
+    if (hasWaiting && !mainWindow.isFocused()) {
+      mainWindow.flashFrame(true);
+      // Edge-triggered: only log when transitioning from off/unknown -> on
+      if (lastLoggedFlashOn !== true) {
+        console.log('[approval-alert] flashFrame on');
+        lastLoggedFlashOn = true;
+      }
+    } else if (!hasWaiting) {
+      mainWindow.flashFrame(false);
+      if (lastLoggedFlashOn === true) {
+        console.log('[approval-alert] flashFrame off');
+        lastLoggedFlashOn = false;
+      }
+    }
+  } catch (e) {
+    console.log(`[approval-alert] flashFrame skipped: ${e.message}`);
+  }
+
+  // 5. Badge count = waiting task count. setBadgeCount is a no-op on Windows
+  //    and silently degrades on unsupported Linux desktops; we still call it
+  //    unconditionally so the count clears correctly across platforms.
+  try {
+    const badge = hasWaiting ? currentWaiting.size : 0;
+    app.setBadgeCount(badge);
+    // Edge-triggered: only log when badge value actually changes. Suppresses
+    // the once-per-second `badge=0` heartbeat that previously flooded stdout.
+    if (badge !== lastLoggedBadge) {
+      console.log(`[approval-alert] badge=${badge}`);
+      lastLoggedBadge = badge;
+    }
+  } catch (e) {
+    console.log(`[approval-alert] setBadgeCount skipped: ${e.message}`);
+  }
+}
+
 
 
 // Initialize skin configuration
@@ -178,6 +321,17 @@ function createWindow() {
   // Safety: stop dragging if window loses focus or is hidden
   mainWindow.on('blur', () => {
     stopDrag();
+  });
+
+  // approval-alert: stop flashFrame as soon as the user looks at the window
+  mainWindow.on('focus', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        mainWindow.flashFrame(false);
+      } catch (e) {
+        // flashFrame can throw on some Linux WMs; safe to ignore
+      }
+    }
   });
 
   // Start polling task events after window is ready
@@ -262,6 +416,15 @@ async function refreshAll() {
     });
     mainWindow.webContents.send('sessions-update', mapped);
 
+    // approval-alert: edge-detect waiting transitions on each poll. Uses
+    // the unfiltered hookTasks so renderer's filteredTasks dedup never
+    // hides a waiting signal from the notification path.
+    try {
+      reconcileApprovalAlerts(hookTasks);
+    } catch (e) {
+      console.error('[approval-alert] reconcile error:', e);
+    }
+
     // Resize window
     const displayedItems = filteredTasks.length + mapped.length;
     const itemHeight = 56;
@@ -280,6 +443,17 @@ async function refreshAll() {
 
 
 app.whenReady().then(() => {
+  // approval-alert: Windows requires an AppUserModelId for system notifications
+  // to surface in Action Center reliably. Must be called after whenReady and
+  // before the first `new Notification()`. Reverse-DNS form per Electron docs.
+  if (process.platform === 'win32') {
+    try {
+      app.setAppUserModelId('com.agentpet.desktop');
+    } catch (e) {
+      console.log(`[approval-alert] setAppUserModelId skipped: ${e.message}`);
+    }
+  }
+
   createWindow();
 
   app.on('activate', () => {
