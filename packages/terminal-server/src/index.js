@@ -217,7 +217,11 @@ function processHookEvent(data) {
     // this is a brand-new task or an existing long-running session where
     // Claude raises a mid-flow question. Previously only the new-task path
     // set 'waiting'; existing sessions were stuck on 'working'.
-    if (toolName === 'AskUserQuestion') {
+    // IMPORTANT: only intercept on PreToolUse. PostToolUse for the same
+    // tool means the user already answered, and must fall through to R6
+    // (PostToolUse + waiting -> working) so the task can resume. Without
+    // this guard the task is stuck on 'waiting' forever after answering.
+    if (toolName === 'AskUserQuestion' && hookEvent === 'PreToolUse') {
       const question = data.tool_input && data.tool_input.questions
         && data.tool_input.questions[0] && data.tool_input.questions[0].question;
       const waitingMessage = (question ? String(question) : 'AskUserQuestion').slice(0, 80);
@@ -251,6 +255,15 @@ function processHookEvent(data) {
         existing.status = 'working';
         existing.completedAt = null;
         console.log(`[hook] PostToolUse -> working (was waiting) session=${sessionId}`);
+      } else if (hookEvent === 'PreToolUse' && existing.status === 'waiting') {
+        // R7: PreToolUse for a new tool while still in 'waiting' means the
+        // user rejected the previous PermissionRequest (n / ESC) and Claude
+        // moved on to a different tool. Without this branch the session
+        // stays stuck on 'waiting' forever (yellow). AskUserQuestion's
+        // PreToolUse is intercepted by R2 above and never reaches here.
+        existing.status = 'working';
+        existing.completedAt = null;
+        console.log(`[hook] PreToolUse(${toolName}) -> working (was waiting) session=${sessionId}`);
       } else if (existing.status !== 'completed' && existing.status !== 'interrupted' && existing.status !== 'waiting') {
         existing.status = 'working';
         existing.completedAt = null;
