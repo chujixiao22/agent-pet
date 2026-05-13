@@ -330,6 +330,7 @@ function createWindow() {
 
   // Safety: stop dragging if window loses focus or is hidden
   mainWindow.on('blur', () => {
+    if (isDragging) return;
     stopDrag();
   });
 
@@ -501,6 +502,7 @@ async function refreshAll() {
       ...t,
       type: t.type || 'auto',
       firstPrompt: t.firstPrompt,
+      sessionTitle: t.sessionTitle,
       permissionMode: t.permissionMode,
       startedAt: t.startedAt,
       pid: t.pid
@@ -530,6 +532,7 @@ async function refreshAll() {
         lastToolSummary: task ? (task.lastToolSummary || '') : (s.lastToolSummary || ''),
         // 多会话区分新字段：hookTask 优先（首条 prompt 源自 hook），缺失 fallback 到 session
         firstPrompt: (task && task.firstPrompt) || s.firstPrompt,
+        sessionTitle: (task && task.sessionTitle) || s.sessionTitle || (task && task.firstPrompt) || s.firstPrompt,
         permissionMode: (task && task.permissionMode) || s.permissionMode,
         startedAt: (task && task.startedAt) || s.startedAt
       };
@@ -617,11 +620,20 @@ app.on('before-quit', () => {
 
 // Handle drag start from renderer
 ipcMain.on('drag-start', (event, { x, y }) => {
-  if (isDragging) return;
+  if (isDragging) {
+    stopDrag();
+  }
+
+  const startX = Number(x);
+  const startY = Number(y);
+  if (!Number.isFinite(startX) || !Number.isFinite(startY)) {
+    console.warn(`[DesktopPet] Ignoring drag-start with invalid point: ${x}, ${y}`);
+    return;
+  }
 
   hideTooltipWindow();
   isDragging = true;
-  dragStartMouse = { x, y };
+  dragStartMouse = { x: startX, y: startY };
 
   if (mainWindow) {
     const [windowX, windowY] = mainWindow.getPosition();
@@ -630,19 +642,46 @@ ipcMain.on('drag-start', (event, { x, y }) => {
 
   // Use screen API to track mouse position at OS level every ~16ms (60fps)
   dragInterval = setInterval(() => {
-    if (!isDragging || !mainWindow) {
+    if (!isDragging || !mainWindow || mainWindow.isDestroyed()) {
       stopDrag();
       return;
     }
 
     const currentMouse = screen.getCursorScreenPoint();
+    if (!Number.isFinite(currentMouse.x) || !Number.isFinite(currentMouse.y)) {
+      console.warn(`[DesktopPet] Stopping drag with invalid cursor: ${currentMouse.x}, ${currentMouse.y}`);
+      stopDrag();
+      return;
+    }
+
     const deltaX = currentMouse.x - dragStartMouse.x;
     const deltaY = currentMouse.y - dragStartMouse.y;
+    const rawX = dragStartWindow.x + deltaX;
+    const rawY = dragStartWindow.y + deltaY;
 
-    mainWindow.setPosition(
-      dragStartWindow.x + deltaX,
-      dragStartWindow.y + deltaY
-    );
+    if (!Number.isFinite(rawX) || !Number.isFinite(rawY)) {
+      console.warn(`[DesktopPet] Stopping drag with invalid target: ${rawX}, ${rawY}`);
+      stopDrag();
+      return;
+    }
+
+    const display = screen.getDisplayNearestPoint(currentMouse);
+    const workArea = display.workArea;
+    const [windowWidth, windowHeight] = mainWindow.getSize();
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+    const minX = workArea.x - windowWidth + 32;
+    const maxX = workArea.x + workArea.width - 32;
+    const minY = workArea.y;
+    const maxY = workArea.y + workArea.height - 32;
+    const nextX = Math.trunc(clamp(rawX, minX, maxX));
+    const nextY = Math.trunc(clamp(rawY, minY, maxY));
+
+    try {
+      mainWindow.setPosition(nextX, nextY);
+    } catch (err) {
+      console.warn(`[DesktopPet] Stopping drag after setPosition failed: ${err.message}`);
+      stopDrag();
+    }
   }, 16);
 });
 

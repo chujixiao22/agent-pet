@@ -29,17 +29,84 @@ function truncate(str, n) {
   return str.length > n ? str.slice(0, n) + '…' : str;
 }
 
-// cwd → 色条 HSL：6 色桶，60° 步进，同项目必同色
-function stripeColorFor(cwd) {
-  const key = cwd || '';
-  if (!key) return 'hsl(0, 0%, 70%)';
+// Project stripe colors: same project keeps one color, visible projects avoid collisions.
+const PROJECT_STRIPE_COLORS = [
+  '#4FC3F7',
+  '#FFB74D',
+  '#81C784',
+  '#BA68C8',
+  '#F06292',
+  '#7986CB',
+  '#4DB6AC',
+  '#E57373',
+  '#DCE775',
+  '#9575CD',
+  '#64B5F6',
+  '#FF8A65'
+];
+const FALLBACK_PROJECT_STRIPE_COLOR = 'hsl(0, 0%, 70%)';
+
+function stableHash(str) {
   let h = 0;
-  for (let i = 0; i < key.length; i++) {
-    h = ((h << 5) - h) + key.charCodeAt(i);
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h) + str.charCodeAt(i);
     h |= 0;
   }
-  const idx = Math.abs(h) % 6;
-  return `hsl(${idx * 60}, 70%, 55%)`;
+  return h >>> 0;
+}
+
+function normalizeProjectKey(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '')
+    .toLowerCase();
+}
+
+function projectKeyFor(item) {
+  if (!item) return '';
+  return normalizeProjectKey(
+    item.projectId ||
+    item.project_id ||
+    item.projectPath ||
+    item.project_path ||
+    item.repository ||
+    item.repo ||
+    item.cwd ||
+    item.project ||
+    item.projectName ||
+    item.project_name ||
+    item.name ||
+    ''
+  );
+}
+
+function colorIndexForProject(key, projectColorIndexes) {
+  if (projectColorIndexes.has(key)) {
+    return projectColorIndexes.get(key);
+  }
+
+  const preferred = stableHash(key) % PROJECT_STRIPE_COLORS.length;
+  const usedIndexes = new Set(projectColorIndexes.values());
+  let colorIndex = preferred;
+
+  for (let offset = 0; offset < PROJECT_STRIPE_COLORS.length; offset++) {
+    const candidate = (preferred + offset) % PROJECT_STRIPE_COLORS.length;
+    if (!usedIndexes.has(candidate)) {
+      colorIndex = candidate;
+      break;
+    }
+  }
+
+  projectColorIndexes.set(key, colorIndex);
+  return colorIndex;
+}
+
+function stripeColorForProject(item, projectColorIndexes) {
+  const key = projectKeyFor(item);
+  if (!key) return FALLBACK_PROJECT_STRIPE_COLOR;
+  const colorIndex = colorIndexForProject(key, projectColorIndexes);
+  return PROJECT_STRIPE_COLORS[colorIndex];
 }
 
 // 相对时间文案
@@ -288,8 +355,39 @@ class Pet {
   }
 
   bindEvents() {
+    let suppressNextClick = false;
+    let dragPointerId = null;
+    let dragStartPos = { x: 0, y: 0 };
+
+    const finishDrag = (e) => {
+      if (dragPointerId === null) return;
+      if (e && e.pointerId !== undefined && e.pointerId !== dragPointerId) return;
+
+      const pointerId = dragPointerId;
+      dragPointerId = null;
+      try {
+        if (this.container.hasPointerCapture(pointerId)) {
+          this.container.releasePointerCapture(pointerId);
+        }
+      } catch (err) {
+        // Pointer capture can already be released by the browser.
+      }
+      window.electronAPI.dragEnd();
+    };
+
+    const pointerScreenPoint = (e) => ({
+      x: Number.isFinite(e.screenX) ? e.screenX : window.screenX + e.clientX,
+      y: Number.isFinite(e.screenY) ? e.screenY : window.screenY + e.clientY
+    });
+
     // Click interaction
-    this.container.addEventListener('click', () => {
+    this.container.addEventListener('click', (e) => {
+      if (suppressNextClick) {
+        e.preventDefault();
+        e.stopPropagation();
+        suppressNextClick = false;
+        return;
+      }
       this.handleClick();
     });
 
@@ -300,23 +398,29 @@ class Pet {
 
     // Drag handling — simplified: renderer only sends start/end,
     // main process tracks mouse via electron.screen API
-    let mouseDownPos = { x: 0, y: 0 };
-
-    this.container.addEventListener('mousedown', (e) => {
+    this.container.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
       // Prevent default to stop any native drag behavior / ghost image
       e.preventDefault();
-      mouseDownPos = { x: e.screenX, y: e.screenY };
-      window.electronAPI.dragStart(e.screenX, e.screenY);
+      const point = pointerScreenPoint(e);
+      dragPointerId = e.pointerId;
+      dragStartPos = point;
+      suppressNextClick = false;
+      this.container.setPointerCapture(e.pointerId);
+      window.electronAPI.dragStart(point.x, point.y);
     });
 
-    this.container.addEventListener('mouseup', () => {
-      window.electronAPI.dragEnd();
+    this.container.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== dragPointerId) return;
+      const point = pointerScreenPoint(e);
+      if (Math.abs(point.x - dragStartPos.x) > 3 || Math.abs(point.y - dragStartPos.y) > 3) {
+        suppressNextClick = true;
+      }
     });
 
-    // Safety net: if mouse leaves the window during drag, end it
-    this.container.addEventListener('mouseleave', () => {
-      window.electronAPI.dragEnd();
-    });
+    this.container.addEventListener('pointerup', finishDrag);
+    this.container.addEventListener('pointercancel', finishDrag);
+    document.addEventListener('mouseup', finishDrag);
 
     // Prevent native drag behavior on the image element
     this.sprite.addEventListener('dragstart', (e) => {
@@ -388,6 +492,7 @@ class TaskList {
     this.tickTimer = null;
     this.hoveredItemKey = null;
     this.lastTooltipPayload = null;
+    this.projectColorIndexes = new Map();
     this.startRelativeTimeTick();
   }
 
@@ -412,8 +517,9 @@ class TaskList {
   showTooltip(cardEl, item) {
     const key = this.itemKey(item);
     this.hoveredItemKey = key;
-    const prompt = (item.firstPrompt && item.firstPrompt.trim())
-      ? item.firstPrompt
+    const displayPrompt = item.sessionTitle || item.firstPrompt || '';
+    const prompt = (displayPrompt && displayPrompt.trim())
+      ? displayPrompt
       : '（用户尚未输入任何 prompt）';
     const rect = cardEl.getBoundingClientRect();
     const payload = {
@@ -483,10 +589,10 @@ class TaskList {
       div.dataset.type = item.itemType;
       div.dataset.id = item.id;
       div.dataset.cwd = item.cwd || '';
-      // 左侧 4px 色条（按 cwd hash）
+      // Left 4px stripe is assigned per project.
       const stripe = document.createElement('div');
       stripe.className = 'task-stripe';
-      stripe.style.background = stripeColorFor(item.cwd);
+      stripe.style.background = stripeColorForProject(item, this.projectColorIndexes);
       div.appendChild(stripe);
 
       const indicator = document.createElement('div');
@@ -519,8 +625,9 @@ class TaskList {
       // 第二行：首条 prompt 前 60 字（无值显示占位）
       const promptEl = document.createElement('div');
       promptEl.className = 'task-prompt';
-      if (item.firstPrompt && String(item.firstPrompt).trim()) {
-        promptEl.textContent = truncate(String(item.firstPrompt), 60);
+      const displayPrompt = item.sessionTitle || item.firstPrompt || '';
+      if (displayPrompt && String(displayPrompt).trim()) {
+        promptEl.textContent = truncate(String(displayPrompt), 60);
       } else {
         promptEl.classList.add('placeholder');
         promptEl.textContent = '等待首条对话…';

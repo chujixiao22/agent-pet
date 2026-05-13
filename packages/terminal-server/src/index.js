@@ -28,6 +28,7 @@ const outputBuffers = new Map(); // sessionId -> string[] (for reconnection)
 const hookTasks = new Map();
 const transcriptPathCache = new Map();
 const transcriptPromptCache = new Map();
+const transcriptTitleCache = new Map();
 const transcriptPermissionModeCache = new Map();
 
 // State detection patterns
@@ -181,8 +182,16 @@ function cleanPromptText(text) {
   let value = String(text || '')
     .replace(/<ide_opened_file>[\s\S]*?<\/ide_opened_file>/g, '')
     .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '')
+    .replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, '')
+    .replace(/<command-name>[\s\S]*?<\/command-name>/g, '')
+    .replace(/<command-message>[\s\S]*?<\/command-message>/g, '')
+    .replace(/<command-args>[\s\S]*?<\/command-args>/g, '')
     .replace(/<ide_opened_file>.*$/gm, '')
     .replace(/<system-reminder>.*$/gm, '')
+    .replace(/<local-command-caveat>.*$/gm, '')
+    .replace(/<command-name>.*$/gm, '')
+    .replace(/<command-message>.*$/gm, '')
+    .replace(/<command-args>.*$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
   return value;
@@ -190,7 +199,7 @@ function cleanPromptText(text) {
 
 function isUserContextText(text) {
   const value = String(text || '').trim();
-  return /^<(ide_opened_file|system-reminder)>/i.test(value)
+  return /^<(ide_opened_file|system-reminder|local-command-caveat|command-name|command-message|command-args)>/i.test(value)
     || /^The user opened the file .+ in the IDE\./i.test(value);
 }
 
@@ -260,7 +269,7 @@ function readFirstPromptFromTranscript(transcriptPath) {
     if (!line.trim()) continue;
     try {
       const item = JSON.parse(line);
-      if (item.type !== 'user' || !item.message || item.message.role !== 'user') {
+      if (item.type !== 'user' || !item.message || item.message.role !== 'user' || item.isMeta) {
         continue;
       }
       const prompt = clampFirstPrompt(contentToPromptText(item.message.content));
@@ -273,6 +282,38 @@ function readFirstPromptFromTranscript(transcriptPath) {
     }
   }
   transcriptPromptCache.set(transcriptPath, '');
+  return '';
+}
+
+function readTitleFromTranscript(transcriptPath) {
+  if (!transcriptPath || !fs.existsSync(transcriptPath)) return '';
+  if (transcriptTitleCache.has(transcriptPath)) {
+    return transcriptTitleCache.get(transcriptPath);
+  }
+
+  let text = '';
+  try {
+    text = fs.readFileSync(transcriptPath, 'utf8');
+  } catch (_) {
+    transcriptTitleCache.set(transcriptPath, '');
+    return '';
+  }
+
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const item = JSON.parse(line);
+      const title = clampFirstPrompt(item.aiTitle || item.title || item.sessionTitle);
+      if (item.type === 'ai-title' && title) {
+        transcriptTitleCache.set(transcriptPath, title);
+        return title;
+      }
+    } catch (_) {
+      // Ignore malformed transcript lines.
+    }
+  }
+
+  transcriptTitleCache.set(transcriptPath, '');
   return '';
 }
 
@@ -314,12 +355,6 @@ function readPermissionModeFromTranscript(transcriptPath) {
 function hydrateFirstPrompt(task, rawPrompt, sessionId) {
   if (!task || task.firstPrompt) return;
 
-  const directPrompt = clampFirstPrompt(rawPrompt);
-  if (directPrompt) {
-    task.firstPrompt = directPrompt;
-    return;
-  }
-
   const transcriptPath = task.transcriptPath || findTranscriptPath(sessionId);
   const transcriptPrompt = readFirstPromptFromTranscript(transcriptPath);
   if (transcriptPrompt) {
@@ -327,6 +362,31 @@ function hydrateFirstPrompt(task, rawPrompt, sessionId) {
     if (transcriptPath && !task.transcriptPath) {
       task.transcriptPath = transcriptPath;
     }
+    return;
+  }
+
+  const directPrompt = clampFirstPrompt(rawPrompt);
+  if (directPrompt) {
+    task.firstPrompt = directPrompt;
+  }
+}
+
+function hydrateSessionTitle(task, sessionId) {
+  if (!task || task.sessionTitle) return;
+
+  const transcriptPath = task.transcriptPath || findTranscriptPath(sessionId);
+  const transcriptTitle = readTitleFromTranscript(transcriptPath);
+  if (transcriptTitle) {
+    task.sessionTitle = transcriptTitle;
+    if (transcriptPath && !task.transcriptPath) {
+      task.transcriptPath = transcriptPath;
+    }
+    return;
+  }
+
+  hydrateFirstPrompt(task, undefined, sessionId);
+  if (task.firstPrompt) {
+    task.sessionTitle = task.firstPrompt;
   }
 }
 
@@ -743,7 +803,9 @@ function createSession(ws, cwd, cols = 120, rows = 40) {
       state: 'idle',
       toolCount: 0,
       lastToolSummary: '',
-      startedAt: new Date().toISOString()
+      startedAt: new Date().toISOString(),
+      firstPrompt: null,
+      sessionTitle: null
     };
     sessions.set(id, session);
     outputBuffers.set(id, []);
@@ -868,6 +930,7 @@ function broadcastSessions() {
 
 function normalizeHookTask(task) {
   hydrateFirstPrompt(task, undefined, task.id);
+  hydrateSessionTitle(task, task.id);
   hydratePermissionMode(task, undefined, task.id);
   // 保证 firstPrompt/startedAt 字段始终存在（缺失时显式为 null），前端可稳定 destruct
   return {
@@ -875,6 +938,7 @@ function normalizeHookTask(task) {
     type: 'auto',
     pid: task.pid ?? null,
     firstPrompt: task.firstPrompt || null,
+    sessionTitle: task.sessionTitle || task.firstPrompt || null,
     permissionMode: task.permissionMode || null,
     startedAt: task.startedAt || null
   };
@@ -905,6 +969,7 @@ app.get('/api/sessions', (req, res) => {
       toolCount: session.toolCount ?? 0,
       lastToolSummary: session.lastToolSummary ?? null,
       firstPrompt: (hookTask && hookTask.firstPrompt) || session.firstPrompt || null,
+      sessionTitle: (hookTask && hookTask.sessionTitle) || session.sessionTitle || (hookTask && hookTask.firstPrompt) || session.firstPrompt || null,
       permissionMode: (hookTask && hookTask.permissionMode) || session.permissionMode || null,
       startedAt: (hookTask && hookTask.startedAt) || session.startedAt || null
     };
