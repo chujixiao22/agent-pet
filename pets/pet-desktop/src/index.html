@@ -50,7 +50,7 @@
     }
 
     body {
-      width: 720px;
+      width: 260px;
       min-height: 200px;
       height: auto;
       overflow: hidden;
@@ -418,62 +418,6 @@
       pointer-events: none;
     }
 
-    /* 全局 Tooltip 单例 */
-    #task-tooltip {
-      position: fixed;
-      z-index: 9999;
-      display: none;
-      width: 360px;
-      max-width: 360px;
-      background: rgba(18, 18, 18, 0.96);
-      color: #f0f0f0;
-      font-family: system-ui, -apple-system, sans-serif;
-      font-size: 12px;
-      font-weight: 400;
-      line-height: 1.45;
-      padding: 16px;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
-      pointer-events: none;
-    }
-
-    .tooltip-meta {
-      display: grid;
-      grid-template-columns: 54px minmax(0, 1fr);
-      row-gap: 8px;
-      column-gap: 14px;
-      align-items: baseline;
-    }
-
-    .tooltip-label {
-      color: rgba(255, 255, 255, 0.48);
-      font-weight: 400;
-      text-transform: lowercase;
-    }
-
-    .tooltip-value {
-      color: #f7f7f7;
-      font-weight: 400;
-      overflow-wrap: anywhere;
-    }
-
-    .tooltip-path,
-    .tooltip-date {
-      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-      font-size: 11px;
-    }
-
-    .tooltip-prompt {
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-      color: #d8ecff;
-      font-size: 11px;
-      font-weight: 400;
-      overflow-wrap: anywhere;
-    }
-
     .task-dismiss {
       background: none;
       border: none;
@@ -525,8 +469,6 @@
     <img id="pet-sprite" src="" alt="Pet">
   </div>
   <div id="task-panel"></div>
-  <div id="task-tooltip" role="tooltip"></div>
-
   <script src="renderer.js"></script>
 </body>
 </html>

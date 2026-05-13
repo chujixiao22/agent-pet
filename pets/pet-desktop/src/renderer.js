@@ -385,9 +385,9 @@ class TaskList {
     this.panel = document.getElementById('task-panel');
     this.tasks = [];
     this.sessions = [];
-    this.tooltip = document.getElementById('task-tooltip');
     this.tickTimer = null;
     this.hoveredItemKey = null;
+    this.lastTooltipPayload = null;
     this.startRelativeTimeTick();
   }
 
@@ -410,76 +410,35 @@ class TaskList {
   }
 
   showTooltip(cardEl, item) {
-    if (!this.tooltip) return;
-    this.hoveredItemKey = this.itemKey(item);
+    const key = this.itemKey(item);
+    this.hoveredItemKey = key;
     const prompt = (item.firstPrompt && item.firstPrompt.trim())
       ? item.firstPrompt
       : '（用户尚未输入任何 prompt）';
-    this.tooltip.innerHTML = '';
-
-    const meta = document.createElement('div');
-    meta.className = 'tooltip-meta';
-
-    const cwdLabel = document.createElement('div');
-    cwdLabel.className = 'tooltip-label';
-    cwdLabel.textContent = 'cwd';
-    meta.appendChild(cwdLabel);
-
-    const cwdValue = document.createElement('div');
-    cwdValue.className = 'tooltip-value tooltip-path';
-    cwdValue.textContent = item.cwd || '(无)';
-    meta.appendChild(cwdValue);
-
-    const startedLabel = document.createElement('div');
-    startedLabel.className = 'tooltip-label';
-    startedLabel.textContent = '启动';
-    meta.appendChild(startedLabel);
-
-    const startedValue = document.createElement('div');
-    startedValue.className = 'tooltip-value tooltip-date';
-    startedValue.textContent = formatAbsoluteTime(item.startedAt) || '(无)';
-    meta.appendChild(startedValue);
-
-    const promptEl = document.createElement('div');
-    promptEl.className = 'tooltip-prompt';
-    promptEl.textContent = prompt;
-
-    this.tooltip.appendChild(meta);
-    this.tooltip.appendChild(promptEl);
-    this.tooltip.style.display = 'block';
-    this.positionTooltip(cardEl);
-  }
-
-  positionTooltip(cardEl) {
-    if (!this.tooltip) return;
     const rect = cardEl.getBoundingClientRect();
-    const pad = 8;
-    const ttW = this.tooltip.offsetWidth || 280;
-    const ttH = this.tooltip.offsetHeight || 100;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+    const payload = {
+      key,
+      cwd: item.cwd || '',
+      startedAt: formatAbsoluteTime(item.startedAt) || '',
+      prompt,
+      anchor: {
+        x: Math.round(window.screenX + rect.left),
+        y: Math.round(window.screenY + rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height)
+      }
+    };
+    const payloadKey = JSON.stringify(payload);
+    if (payloadKey === this.lastTooltipPayload) return;
 
-    // Anchor to the card's right edge and align with the card top.
-    let left = rect.right + pad;
-    let top = rect.top;
-
-    // Fall back to the card's left side when the right side has no room.
-    if (left + ttW > vw - pad) {
-      left = rect.left - ttW - pad;
-    }
-    left = clamp(left, pad, Math.max(pad, vw - ttW - pad));
-
-    // Keep the tooltip inside the visible window without flipping vertically.
-    top = clamp(top, pad, Math.max(pad, vh - ttH - pad));
-
-    this.tooltip.style.left = left + 'px';
-    this.tooltip.style.top = top + 'px';
+    this.lastTooltipPayload = payloadKey;
+    window.electronAPI.showTooltip(payload);
   }
 
   hideTooltip() {
     this.hoveredItemKey = null;
-    if (this.tooltip) this.tooltip.style.display = 'none';
+    this.lastTooltipPayload = null;
+    window.electronAPI.hideTooltip();
   }
 
   itemKey(item) {
@@ -513,8 +472,8 @@ class TaskList {
     this.panel.classList.add('visible');
     this.panel.innerHTML = '';
     const hoveredItem = this.findItemByKey(allItems, this.hoveredItemKey);
-    if (!hoveredItem && this.tooltip) {
-      this.tooltip.style.display = 'none';
+    if (!hoveredItem) {
+      this.hideTooltip();
     }
 
     for (const item of allItems) {

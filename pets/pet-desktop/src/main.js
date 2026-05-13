@@ -119,6 +119,9 @@ let isDragging = false;
 let dragInterval = null;
 let dragStartMouse = { x: 0, y: 0 };
 let dragStartWindow = { x: 0, y: 0 };
+let tooltipWindow = null;
+let pendingTooltip = null;
+let tooltipReady = false;
 let wsMap = {}; // sessionId -> WebSocket
 
 // approval-alert: track sessions that have already been notified during the
@@ -277,15 +280,14 @@ console.log(`[DesktopPet] Loading skin: ${skinConfig.displayName} (${skinName})`
 let taskPollInterval = null;
 
 const PANEL_WIDTH = 260;
-const TOOLTIP_SPACE = 460;
-const WINDOW_WIDTH = PANEL_WIDTH + TOOLTIP_SPACE;
+const TOOLTIP_WIDTH = 360;
+const TOOLTIP_GAP = 8;
 const MIN_WINDOW_HEIGHT = 220;
 const MAX_WINDOW_HEIGHT = 900;
 
-
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: WINDOW_WIDTH,
+    width: PANEL_WIDTH,
     height: 200,
     frame: false,
     transparent: true,
@@ -320,6 +322,9 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
+    if (tooltipWindow && !tooltipWindow.isDestroyed()) {
+      tooltipWindow.close();
+    }
     mainWindow = null;
   });
 
@@ -348,6 +353,99 @@ function createWindow() {
       spritePath: skinSpritePath
     });
   });
+}
+
+function createTooltipWindow() {
+  if (tooltipWindow && !tooltipWindow.isDestroyed()) return tooltipWindow;
+
+  tooltipReady = false;
+  tooltipWindow = new BrowserWindow({
+    width: TOOLTIP_WIDTH,
+    height: 140,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    movable: false,
+    focusable: false,
+    show: false,
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'tooltip-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  tooltipWindow.setMenu(null);
+  tooltipWindow.setIgnoreMouseEvents(true);
+  tooltipWindow.loadFile(path.join(__dirname, 'tooltip.html'));
+
+  tooltipWindow.webContents.on('did-finish-load', () => {
+    tooltipReady = true;
+    if (pendingTooltip && tooltipWindow && !tooltipWindow.isDestroyed()) {
+      tooltipWindow.webContents.send('tooltip-data', pendingTooltip);
+    }
+  });
+
+  tooltipWindow.on('closed', () => {
+    tooltipWindow = null;
+    pendingTooltip = null;
+    tooltipReady = false;
+  });
+
+  return tooltipWindow;
+}
+
+function positionTooltipWindow(anchor, size) {
+  if (!tooltipWindow || tooltipWindow.isDestroyed()) return;
+  const width = Math.ceil(Number(size && size.width) || TOOLTIP_WIDTH);
+  const height = Math.ceil(Number(size && size.height) || 140);
+  const gap = TOOLTIP_GAP;
+  const point = {
+    x: Math.round(anchor.x + anchor.width / 2),
+    y: Math.round(anchor.y + anchor.height / 2)
+  };
+  const display = screen.getDisplayNearestPoint(point);
+  const workArea = display.workArea;
+  const workRight = workArea.x + workArea.width;
+  const workBottom = workArea.y + workArea.height;
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+  const rightX = anchor.x + anchor.width + gap;
+  const leftX = anchor.x - width - gap;
+  const rightSpace = workRight - rightX;
+  const leftSpace = leftX - workArea.x;
+  const x = rightSpace >= width || rightSpace >= leftSpace ? rightX : leftX;
+  const y = clamp(anchor.y, workArea.y + gap, Math.max(workArea.y + gap, workBottom - height - gap));
+
+  tooltipWindow.setBounds({
+    x: Math.round(clamp(x, workArea.x + gap, Math.max(workArea.x + gap, workRight - width - gap))),
+    y: Math.round(y),
+    width,
+    height
+  });
+}
+
+function showTooltipWindow(payload) {
+  if (!mainWindow || mainWindow.isDestroyed() || !payload || !payload.anchor) return;
+  const win = createTooltipWindow();
+  const wasVisible = win.isVisible();
+  pendingTooltip = payload;
+  if (tooltipReady) {
+    win.webContents.send('tooltip-data', payload);
+  }
+  positionTooltipWindow(payload.anchor, { width: TOOLTIP_WIDTH, height: 140 });
+  if (wasVisible) {
+    win.showInactive();
+  }
+}
+
+function hideTooltipWindow() {
+  pendingTooltip = null;
+  if (tooltipWindow && !tooltipWindow.isDestroyed()) {
+    tooltipWindow.hide();
+  }
 }
 
 function stopDrag() {
@@ -460,8 +558,25 @@ ipcMain.on('resize-pet-window', (event, height) => {
     Math.min(MAX_WINDOW_HEIGHT, Math.ceil(Number(height) || MIN_WINDOW_HEIGHT))
   );
   const current = mainWindow.getSize();
-  if (current[0] !== WINDOW_WIDTH || Math.abs(current[1] - nextHeight) > 2) {
-    mainWindow.setSize(WINDOW_WIDTH, nextHeight);
+  if (current[0] !== PANEL_WIDTH || Math.abs(current[1] - nextHeight) > 2) {
+    mainWindow.setSize(PANEL_WIDTH, nextHeight);
+  }
+});
+
+ipcMain.on('show-tooltip', (event, payload) => {
+  showTooltipWindow(payload);
+});
+
+ipcMain.on('hide-tooltip', () => {
+  hideTooltipWindow();
+});
+
+ipcMain.on('tooltip-size', (event, size) => {
+  if (!pendingTooltip || !pendingTooltip.anchor) return;
+  if (size && size.key && size.key !== pendingTooltip.key) return;
+  positionTooltipWindow(pendingTooltip.anchor, size);
+  if (tooltipWindow && !tooltipWindow.isDestroyed() && !tooltipWindow.isVisible()) {
+    tooltipWindow.showInactive();
   }
 });
 
@@ -504,6 +619,7 @@ app.on('before-quit', () => {
 ipcMain.on('drag-start', (event, { x, y }) => {
   if (isDragging) return;
 
+  hideTooltipWindow();
   isDragging = true;
   dragStartMouse = { x, y };
 
