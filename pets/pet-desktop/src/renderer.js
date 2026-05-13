@@ -8,6 +8,63 @@ const STATES = {
   ERROR: 'error'
 };
 
+function permissionModeBadge(mode) {
+  switch (String(mode || '').toLowerCase()) {
+    case 'auto':
+      return { label: 'Auto', className: 'auto', title: 'Claude auto mode' };
+    case 'plan':
+      return { label: 'Plan', className: 'plan', title: 'Claude plan mode' };
+    case 'acceptedits':
+      return { label: 'Edits', className: 'edits', title: 'Claude accept edits mode' };
+    case 'bypasspermissions':
+      return { label: 'Bypass', className: 'bypass', title: 'Claude bypass permissions mode' };
+    default:
+      return null;
+  }
+}
+
+// 首条 prompt 前 60 字；超出用省略号字符截断
+function truncate(str, n) {
+  if (!str) return '';
+  return str.length > n ? str.slice(0, n) + '…' : str;
+}
+
+// cwd → 色条 HSL：6 色桶，60° 步进，同项目必同色
+function stripeColorFor(cwd) {
+  const key = cwd || '';
+  if (!key) return 'hsl(0, 0%, 70%)';
+  let h = 0;
+  for (let i = 0; i < key.length; i++) {
+    h = ((h << 5) - h) + key.charCodeAt(i);
+    h |= 0;
+  }
+  const idx = Math.abs(h) % 6;
+  return `hsl(${idx * 60}, 70%, 55%)`;
+}
+
+// 相对时间文案
+function formatRelativeTime(startedAt) {
+  if (!startedAt) return '';
+  const ts = startedAt instanceof Date ? startedAt.getTime() : new Date(startedAt).getTime();
+  if (!Number.isFinite(ts)) return '';
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (s < 10) return '刚刚';
+  if (s < 60) return `${s}s 前`;
+  if (s < 3600) return `${Math.floor(s / 60)}m 前`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h 前`;
+  return `${Math.floor(s / 86400)}d 前`;
+}
+
+// 绝对时间（tooltip 用）
+function formatAbsoluteTime(startedAt) {
+  if (!startedAt) return '';
+  const d = startedAt instanceof Date ? startedAt : new Date(startedAt);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+         `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 // Default animation configuration (fallback)
 const DEFAULT_ANIMATION_CONFIG = {
   [STATES.IDLE]: { fps: 8, frames: 12, loop: true },
@@ -136,6 +193,8 @@ class Pet {
 
     if (!frames || frames.length === 0) return;
 
+    this.container.dataset.state = this.currentState;
+
     // Update sprite
     this.sprite.src = frames[this.currentFrame];
 
@@ -167,6 +226,7 @@ class Pet {
 
     this.currentState = newState;
     this.currentFrame = 0;
+    this.container.dataset.state = newState;
 
     // Restart animation with new state
     clearTimeout(this.animationTimer);
@@ -325,6 +385,10 @@ class TaskList {
     this.panel = document.getElementById('task-panel');
     this.tasks = [];
     this.sessions = [];
+    this.tooltip = document.getElementById('task-tooltip');
+    this.tickTimer = null;
+    this.hoveredItemKey = null;
+    this.startRelativeTimeTick();
   }
 
   setTasks(tasks) {
@@ -337,6 +401,108 @@ class TaskList {
     this.render();
   }
 
+  // 相对时间每 30s 刷一次（设计 §4.2 / AC-4）
+  startRelativeTimeTick() {
+    if (this.tickTimer) return;
+    this.tickTimer = setInterval(() => {
+      this.render();
+    }, 30000);
+  }
+
+  showTooltip(cardEl, item) {
+    if (!this.tooltip) return;
+    this.hoveredItemKey = this.itemKey(item);
+    const prompt = (item.firstPrompt && item.firstPrompt.trim())
+      ? item.firstPrompt
+      : '（用户尚未输入任何 prompt）';
+    this.tooltip.innerHTML = '';
+
+    const meta = document.createElement('div');
+    meta.className = 'tooltip-meta';
+
+    const cwdLabel = document.createElement('div');
+    cwdLabel.className = 'tooltip-label';
+    cwdLabel.textContent = 'cwd';
+    meta.appendChild(cwdLabel);
+
+    const cwdValue = document.createElement('div');
+    cwdValue.className = 'tooltip-value tooltip-path';
+    cwdValue.textContent = item.cwd || '(无)';
+    meta.appendChild(cwdValue);
+
+    const startedLabel = document.createElement('div');
+    startedLabel.className = 'tooltip-label';
+    startedLabel.textContent = '启动';
+    meta.appendChild(startedLabel);
+
+    const startedValue = document.createElement('div');
+    startedValue.className = 'tooltip-value tooltip-date';
+    startedValue.textContent = formatAbsoluteTime(item.startedAt) || '(无)';
+    meta.appendChild(startedValue);
+
+    const promptEl = document.createElement('div');
+    promptEl.className = 'tooltip-prompt';
+    promptEl.textContent = prompt;
+
+    this.tooltip.appendChild(meta);
+    this.tooltip.appendChild(promptEl);
+    this.tooltip.style.display = 'block';
+    this.positionTooltip(cardEl);
+  }
+
+  positionTooltip(cardEl) {
+    if (!this.tooltip) return;
+    const rect = cardEl.getBoundingClientRect();
+    const pad = 8;
+    const ttW = this.tooltip.offsetWidth || 280;
+    const ttH = this.tooltip.offsetHeight || 100;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+    // Anchor to the card's right edge and align with the card top.
+    let left = rect.right + pad;
+    let top = rect.top;
+
+    // Fall back to the card's left side when the right side has no room.
+    if (left + ttW > vw - pad) {
+      left = rect.left - ttW - pad;
+    }
+    left = clamp(left, pad, Math.max(pad, vw - ttW - pad));
+
+    // Keep the tooltip inside the visible window without flipping vertically.
+    top = clamp(top, pad, Math.max(pad, vh - ttH - pad));
+
+    this.tooltip.style.left = left + 'px';
+    this.tooltip.style.top = top + 'px';
+  }
+
+  hideTooltip() {
+    this.hoveredItemKey = null;
+    if (this.tooltip) this.tooltip.style.display = 'none';
+  }
+
+  itemKey(item) {
+    return `${item.itemType || ''}:${item.id || ''}`;
+  }
+
+  findItemByKey(items, key) {
+    if (!key) return null;
+    return items.find(item => this.itemKey(item) === key) || null;
+  }
+
+  reportWindowHeight() {
+    if (!window.electronAPI || !window.electronAPI.resizePetWindow) return;
+    requestAnimationFrame(() => {
+      const panelHeight = this.panel && this.panel.classList.contains('visible')
+        ? this.panel.offsetHeight
+        : 0;
+      const petHeight = document.getElementById('pet-container')?.offsetHeight || 0;
+      const bottomPadding = 10;
+      window.electronAPI.resizePetWindow(petHeight + panelHeight + bottomPadding);
+    });
+  }
+
   render() {
     // Combine tasks and sessions
     const allItems = [
@@ -346,46 +512,63 @@ class TaskList {
 
     this.panel.classList.add('visible');
     this.panel.innerHTML = '';
+    const hoveredItem = this.findItemByKey(allItems, this.hoveredItemKey);
+    if (!hoveredItem && this.tooltip) {
+      this.tooltip.style.display = 'none';
+    }
 
     for (const item of allItems) {
       const div = document.createElement('div');
-      // Use status for display, state is only for pet animation
       const itemStatus = item.status || 'running';
       div.className = `task-item ${itemStatus}`;
-      div.dataset.type = item.itemType;  // 'task' or 'session'
+      div.dataset.type = item.itemType;
       div.dataset.id = item.id;
       div.dataset.cwd = item.cwd || '';
+      // 左侧 4px 色条（按 cwd hash）
+      const stripe = document.createElement('div');
+      stripe.className = 'task-stripe';
+      stripe.style.background = stripeColorFor(item.cwd);
+      div.appendChild(stripe);
 
       const indicator = document.createElement('div');
       indicator.className = 'task-indicator';
+      div.appendChild(indicator);
 
       const content = document.createElement('div');
       content.className = 'task-content';
 
+      // 第一行：项目名 + 非默认 Claude permission mode 徽标
       const header = document.createElement('div');
       header.className = 'task-header';
 
       const project = document.createElement('span');
       project.className = 'task-project';
       project.textContent = this.extractProjectName(item.cwd);
-
       header.appendChild(project);
 
-      // Badge for type (A/M) or status
-      if (item.itemType === 'session') {
-        // Sessions show type badge (Auto/Manual)
-        const typeBadge = document.createElement('span');
-        typeBadge.className = 'task-badge';
-        typeBadge.textContent = item.type === 'auto' ? 'A' : 'M';
-        typeBadge.title = item.type === 'auto' ? 'Auto Task' : 'Manual Session';
-        header.appendChild(typeBadge);
+      const permissionBadge = permissionModeBadge(item.permissionMode);
+      if (permissionBadge) {
+        const badge = document.createElement('span');
+        badge.className = `task-badge ${permissionBadge.className}`;
+        badge.textContent = permissionBadge.label;
+        badge.title = permissionBadge.title;
+        header.appendChild(badge);
       }
-
+      // Default/manual 不渲染徽标，避免列表噪音
       content.appendChild(header);
 
-      // Summary line — wraps the tool summary text. Placed in .task-content
-      // (NOT in .task-header) so it never collides with the absolutely-
-      // positioned .kill-btn pinned to the right edge of .task-item.
+      // 第二行：首条 prompt 前 60 字（无值显示占位）
+      const promptEl = document.createElement('div');
+      promptEl.className = 'task-prompt';
+      if (item.firstPrompt && String(item.firstPrompt).trim()) {
+        promptEl.textContent = truncate(String(item.firstPrompt), 60);
+      } else {
+        promptEl.classList.add('placeholder');
+        promptEl.textContent = '等待首条对话…';
+      }
+      content.appendChild(promptEl);
+
+      // 第三行：lastToolSummary — 放在 .task-content（NOT .task-header）以避开右上角绝对定位的 .kill-btn
       if (item.lastToolSummary) {
         const summaryLine = document.createElement('div');
         summaryLine.className = 'task-summary-line';
@@ -401,24 +584,33 @@ class TaskList {
         content.appendChild(summaryLine);
       }
 
-      div.appendChild(indicator);
       div.appendChild(content);
 
-      // Single click handler - distinguish by type
+      // 右下角相对时间
+      const timeEl = document.createElement('span');
+      timeEl.className = 'task-time';
+      timeEl.textContent = formatRelativeTime(item.startedAt);
+      div.appendChild(timeEl);
+
+      // Single click handler
       div.addEventListener('click', () => {
         console.log('[Renderer] Click on item:', item.itemType, item.id);
         if (item.itemType === 'task') {
           window.electronAPI.openProject(item.cwd);
         } else {
-          // session - open terminal window
           window.electronAPI.openTerminalClient(item.id);
         }
       });
 
-      // Close button for all items
+      // Tooltip hover 绑定
+      div.addEventListener('mouseenter', () => this.showTooltip(div, item));
+      div.addEventListener('mouseleave', () => this.hideTooltip());
+
+      // Close button
       const closeBtn = document.createElement('button');
       closeBtn.className = 'kill-btn';
       closeBtn.textContent = '×';
+      closeBtn.setAttribute('aria-label', '关闭');
       closeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (item.itemType === 'session') {
@@ -430,6 +622,10 @@ class TaskList {
       div.appendChild(closeBtn);
 
       this.panel.appendChild(div);
+
+      if (this.itemKey(item) === this.hoveredItemKey) {
+        this.showTooltip(div, item);
+      }
     }
 
     // Add button at bottom
@@ -450,6 +646,7 @@ class TaskList {
 
     addRow.appendChild(addBtn);
     this.panel.appendChild(addRow);
+    this.reportWindowHeight();
   }
 
   extractProjectName(cwd) {

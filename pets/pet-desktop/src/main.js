@@ -276,11 +276,16 @@ console.log(`[DesktopPet] Loading skin: ${skinConfig.displayName} (${skinName})`
 // Task watching
 let taskPollInterval = null;
 
+const PANEL_WIDTH = 260;
+const TOOLTIP_SPACE = 460;
+const WINDOW_WIDTH = PANEL_WIDTH + TOOLTIP_SPACE;
+const MIN_WINDOW_HEIGHT = 220;
+const MAX_WINDOW_HEIGHT = 900;
 
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 200,
+    width: WINDOW_WIDTH,
     height: 200,
     frame: false,
     transparent: true,
@@ -393,7 +398,16 @@ async function refreshAll() {
     // Send updates to renderer - filter out tasks that have corresponding sessions
     const sessionIds = new Set(sessions.map(s => s.id));
     const filteredTasks = hookTasks.filter(t => !sessionIds.has(t.id));
-    mainWindow.webContents.send('tasks-update', filteredTasks.slice(0, 5));
+    // 透传 firstPrompt/startedAt/pid（未提供时保持原值 undefined）
+    const projectedTasks = filteredTasks.slice(0, 5).map(t => ({
+      ...t,
+      type: t.type || 'auto',
+      firstPrompt: t.firstPrompt,
+      permissionMode: t.permissionMode,
+      startedAt: t.startedAt,
+      pid: t.pid
+    }));
+    mainWindow.webContents.send('tasks-update', projectedTasks);
 
     // Build task lookup by id
     const taskById = {};
@@ -403,15 +417,23 @@ async function refreshAll() {
 
     const mapped = sessions.map(s => {
       const task = taskById[s.id];
+      const sessionRunning = s.status === 'running';
+      const displayStatus = task && !(sessionRunning && task.status === 'completed')
+        ? task.status
+        : (sessionRunning ? 'idle' : s.status);
       return {
         id: s.id,
         type: 'manual',
-        cwd: task ? task.cwd : s.cwd,
-        pid: s.pid,
-        status: task ? task.status : s.status,
+        cwd: (task && task.cwd) || s.cwd,
+        pid: s.pid ?? (task && task.pid),
+        status: displayStatus,
         state: s.state || 'idle',
         toolCount: task ? (task.toolCount || 0) : (s.toolCount || 0),
-        lastToolSummary: task ? (task.lastToolSummary || '') : (s.lastToolSummary || '')
+        lastToolSummary: task ? (task.lastToolSummary || '') : (s.lastToolSummary || ''),
+        // 多会话区分新字段：hookTask 优先（首条 prompt 源自 hook），缺失 fallback 到 session
+        firstPrompt: (task && task.firstPrompt) || s.firstPrompt,
+        permissionMode: (task && task.permissionMode) || s.permissionMode,
+        startedAt: (task && task.startedAt) || s.startedAt
       };
     });
     mainWindow.webContents.send('sessions-update', mapped);
@@ -425,21 +447,23 @@ async function refreshAll() {
       console.error('[approval-alert] reconcile error:', e);
     }
 
-    // Resize window
-    const displayedItems = filteredTasks.length + mapped.length;
-    const itemHeight = 56;
-    const addButtonHeight = 48;
-    const panelPadding = 12;
-    if (displayedItems > 0) {
-      const panelHeight = displayedItems * itemHeight + addButtonHeight + panelPadding;
-      mainWindow.setSize(260, 140 + panelHeight);
-    } else {
-      mainWindow.setSize(260, 220);
-    }
+    // Renderer reports exact content height after layout.
   } catch (err) {
     console.error('[Main] Refresh error:', err);
   }
 }
+
+ipcMain.on('resize-pet-window', (event, height) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const nextHeight = Math.max(
+    MIN_WINDOW_HEIGHT,
+    Math.min(MAX_WINDOW_HEIGHT, Math.ceil(Number(height) || MIN_WINDOW_HEIGHT))
+  );
+  const current = mainWindow.getSize();
+  if (current[0] !== WINDOW_WIDTH || Math.abs(current[1] - nextHeight) > 2) {
+    mainWindow.setSize(WINDOW_WIDTH, nextHeight);
+  }
+});
 
 
 app.whenReady().then(() => {
@@ -605,10 +629,14 @@ ipcMain.handle('get-sessions', async () => {
     // Convert to the format expected by renderer
     return sessions.map(s => ({
       id: s.id,
-      type: 'manual',
+      type: s.type || 'manual',
       cwd: s.cwd,
       pid: s.pid,
-      status: s.status
+      status: s.status,
+      firstPrompt: s.firstPrompt,
+      permissionMode: s.permissionMode,
+      startedAt: s.startedAt,
+      lastToolSummary: s.lastToolSummary
     }));
   } catch (err) {
     console.error('[IPC] Failed to get sessions:', err);

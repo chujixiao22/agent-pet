@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   dragStart: (x, y) => ipcRenderer.send('drag-start', { x, y }),
   dragEnd: () => ipcRenderer.send('drag-end'),
+  resizePetWindow: (height) => ipcRenderer.send('resize-pet-window', height),
   onTasksUpdate: (callback) => {
     ipcRenderer.on('tasks-update', (event, tasks) => callback(tasks));
   },
